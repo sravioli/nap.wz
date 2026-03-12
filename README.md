@@ -1,6 +1,6 @@
 <div align="center">
 
-# nap.wzt
+# nap.wz
 
 A **lazy.nvim-inspired plugin manager for [WezTerm]**, simple by design.
 
@@ -27,12 +27,12 @@ Declare your plugins. nap handles the rest.
 
 ## Installation
 
-nap.wzt is installed through WezTerm's built-in plugin system. No external
+nap.wz is installed through WezTerm's built-in plugin system. No external
 tooling required.
 
 ```lua
 local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wzt"
+local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
 ```
 
 That's it. WezTerm clones the repo on first load. To update nap itself, run
@@ -49,7 +49,7 @@ The simplest setup - everything in your `~/.wezterm.lua`:
 
 ```lua
 local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wzt"
+local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
 
 return nap.setup(wezterm.config_builder(), {
   spec = {
@@ -76,7 +76,7 @@ Split your specs into modules for better organization:
 
 ```lua
 local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wzt"
+local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
 
 return nap.setup(wezterm.config_builder(), {
   spec = {
@@ -303,7 +303,7 @@ Returns the mutated config.
 
 ### `nap.apply_to_config(config, opts)` → `config`
 
-Alias for `setup()`. Allows nap.wzt to be used like any other WezTerm plugin.
+Alias for `setup()`. Allows nap.wz to be used like any other WezTerm plugin.
 
 ### `nap.status()` → `table`
 
@@ -358,7 +358,7 @@ nap is intentionally simpler than lazy.nvim:
 
 ## Acknowledgements
 
-nap.wzt is heavily inspired by [**lazy.nvim**](https://github.com/folke/lazy.nvim)
+nap.wz is heavily inspired by [**lazy.nvim**](https://github.com/folke/lazy.nvim)
 by [Folke Lemaitre](https://github.com/folke). The declarative plugin spec
 format, merge-by-name semantics, import system, and `"owner/repo"` shorthand
 are all direct tributes to lazy.nvim's brilliant design. Thank you, Folke, for

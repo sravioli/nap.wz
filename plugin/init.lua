@@ -1,13 +1,13 @@
 local wezterm = require "wezterm"
 
---- Bootstrap: locate nap.wzt's plugin_dir and add it to package.path
+--- Bootstrap: locate nap.wz's plugin_dir and add it to package.path
 --- so that internal modules (nap.*) can be required.
 local function bootstrap()
   local sep = package.config:sub(1, 1)
 
   -- Find ourselves in wezterm.plugin.list()
   for _, p in ipairs(wezterm.plugin.list()) do
-    if p.url:find("nap.wzt", 1, true) then
+    if p.url:find("nap.wz", 1, true) then
       local path_entry = p.plugin_dir
         .. sep
         .. "plugin"
@@ -45,7 +45,7 @@ local _state = {
 ---Usage:
 ---```lua
 ---local wezterm = require "wezterm"
----local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wzt"
+---local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
 ---
 ---return nap.setup(wezterm.config_builder(), {
 ---  spec = {
@@ -103,7 +103,7 @@ function M.setup(config, opts)
 end
 
 ---WezTerm plugin protocol compatibility wrapper.
----Identical to setup(); allows nap.wzt to be used like a regular plugin.
+---Identical to setup(); allows nap.wz to be used like a regular plugin.
 ---@param config table
 ---@param opts table
 ---@return table config

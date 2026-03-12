@@ -20,9 +20,17 @@ end
 ---@return table|nil
 function M.read(path)
   local abs = M.resolve_path(path)
+  -- Check if file exists before trying to load it
+  local f = io.open(abs, "r")
+  if not f then
+    util.info(("no lockfile found at '%s'; skipping"):format(abs))
+    return nil
+  end
+  f:close()
+
   local ok, result = pcall(dofile, abs)
   if not ok then
-    util.warn(("could not read lockfile '%s': %s"):format(abs, result))
+    util.warn(("could not parse lockfile '%s': %s"):format(abs, result))
     return nil
   end
   if type(result) ~= "table" then

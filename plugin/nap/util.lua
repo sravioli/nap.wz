@@ -2,7 +2,7 @@ local wezterm = require "wezterm"
 
 local M = {}
 
-local PREFIX = "[nap.wzt] "
+local PREFIX = "[nap.wz] "
 
 ---Log an informational message.
 ---@param msg string
