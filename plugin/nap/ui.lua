@@ -26,35 +26,83 @@ local function nf(name, fallback)
   return fallback or ""
 end
 
--- ────────────────────────────────────────────────────────────────────────────
--- Helpers
--- ────────────────────────────────────────────────────────────────────────────
+---Extract UI configuration from nap state.
+---@param state table nap internal state
+---@return table ui_config with defaults
+local function get_ui_config(state)
+  local ui = state.nap_config and state.nap_config.ui or {}
+  return {
+    fuzzy = ui.fuzzy ~= false,  -- default true
+    icons = ui.icons ~= false,  -- default true
+    colorscheme = ui.colorscheme or "auto",
+    width = ui.width or 80,
+  }
+end
+
+---Get the active WezTerm colorscheme.
+---@return table colorscheme definition or empty table on error
+local function get_active_colorscheme()
+  local ok, scheme = pcall(function()
+    return wezterm.color.get_builtin_schemes()[wezterm.config.color_scheme]
+  end)
+  if ok and scheme then
+    return scheme
+  end
+  return {}
+end
+
+---Semantic color role mapping to ANSI color fallbacks.
+---@type table<string, string>
+local SEMANTIC_COLORS = {
+  enabled = "Green",      -- indicates enabled/success state
+  disabled = "Red",       -- indicates disabled/inactive state
+  accent = "Cyan",        -- highlights and links
+  muted = "Gray",         -- secondary text
+  path = "Fuchsia",       -- file/directory paths
+  priority = "Teal",      -- metadata like priority
+  warning = "Yellow",     -- warnings and alerts
+}
+
+---Resolve a semantic UI color role to an actual color with fallback.
+---@param role string semantic role name (e.g. "enabled", "accent")
+---@param colorscheme? table active colorscheme (optional)
+---@return table color spec for wezterm.format
+local function resolve_color(role, colorscheme)
+  colorscheme = colorscheme or {}
+  local fallback_ansi = SEMANTIC_COLORS[role] or "White"
+
+  -- For now, use ANSI color fallbacks directly.
+  -- Future: could look up semantic colors in colorscheme definition if available.
+  return { AnsiColor = fallback_ansi }
+end
 
 ---Format a label with foreground color and optional icon.
----@param color string   AnsiColor name (e.g. "Green", "Red")
+---@param color_role string semantic color role (e.g. "enabled", "path")
 ---@param icon string    Nerd Font glyph
 ---@param text string
+---@param colorscheme? table active colorscheme
 ---@return string
-local function colored(color, icon, text)
+local function colored(color_role, icon, text, colorscheme)
   return wezterm.format {
-    { Foreground = { AnsiColor = color } },
+    { Foreground = resolve_color(color_role, colorscheme) },
     { Text = icon .. "  " .. text },
   }
 end
 
 ---Build a display label for a plugin spec.
----@param s table    a resolved spec
----@param env table  environment table
+---@param s table a resolved spec
 ---@return string
-local function plugin_label(s, env)
-  local enabled = apply.is_enabled(s, env)
+local function plugin_label(s)
+  local enabled = apply.is_enabled(s)
+  local colorscheme = get_active_colorscheme()
+
   local badge = enabled
       and wezterm.format {
-        { Foreground = { AnsiColor = "Green" } },
+        { Foreground = resolve_color("enabled", colorscheme) },
         { Text = " ● " },
       }
     or wezterm.format {
-      { Foreground = { AnsiColor = "Red" } },
+      { Foreground = resolve_color("disabled", colorscheme) },
       { Text = " ○ " },
     }
 
@@ -66,9 +114,9 @@ local function plugin_label(s, env)
     { Attribute = { Intensity = "Bold" } },
     { Text = name },
     { Attribute = { Intensity = "Normal" } },
-    { Foreground = { AnsiColor = "Fuchsia" } },
+    { Foreground = resolve_color("path", colorscheme) },
     { Text = "  " .. url },
-    { Foreground = { AnsiColor = "Teal" } },
+    { Foreground = resolve_color("priority", colorscheme) },
     { Text = ("  [P:%d]"):format(prio) },
   } .. badge
 end
@@ -82,11 +130,12 @@ end
 ---@param pane table
 ---@param state table
 local function show_status(window, pane, state)
+  local ui_cfg = get_ui_config(state)
   local choices = {}
   for _, s in ipairs(state.resolved) do
     if not s.import then
       choices[#choices + 1] = {
-        label = plugin_label(s, state.env),
+        label = plugin_label(s),
         id = s.name or "",
       }
     end
@@ -101,7 +150,7 @@ local function show_status(window, pane, state)
     act.InputSelector {
       title = "nap — Plugin Status",
       description = "All managed plugins (press Esc to close)",
-      fuzzy = true,
+      fuzzy = ui_cfg.fuzzy,
       choices = choices,
       action = wezterm.action_callback(function() end),
     },
@@ -127,11 +176,12 @@ end
 ---@param pane table
 ---@param state table
 local function show_uninstall(window, pane, state)
+  local ui_cfg = get_ui_config(state)
   local choices = {}
   for _, s in ipairs(state.resolved) do
     if not s.import and s._resolved_url then
       choices[#choices + 1] = {
-        label = plugin_label(s, state.env),
+        label = plugin_label(s),
         id = s.name or "",
       }
     end
@@ -146,7 +196,7 @@ local function show_uninstall(window, pane, state)
     act.InputSelector {
       title = "nap — Uninstall Plugin",
       description = "Select a plugin to remove from disk",
-      fuzzy = true,
+      fuzzy = ui_cfg.fuzzy,
       choices = choices,
       action = wezterm.action_callback(function(_w, _p, id, _label)
         if not id then
@@ -208,18 +258,20 @@ end
 ---@param pane table
 ---@param state table
 local function show_toggle(window, pane, state)
+  local ui_cfg = get_ui_config(state)
+  local colorscheme = get_active_colorscheme()
   local choices = {}
   for _, s in ipairs(state.resolved) do
     if not s.import and s._resolved_url then
-      local enabled = apply.is_enabled(s, state.env)
+      local enabled = apply.is_enabled(s)
       local action_label = enabled and "Disable" or "Enable"
       local icon = enabled
           and nf("cod_circle_filled", "+")
         or nf("cod_circle_outline", "-")
-      local label_color = enabled and "Green" or "Red"
+      local label_role = enabled and "enabled" or "disabled"
 
       choices[#choices + 1] = {
-        label = colored(label_color, icon, action_label .. ": " .. (s.name or "<unnamed>")),
+        label = colored(label_role, icon, action_label .. ": " .. (s.name or "<unnamed>"), colorscheme),
         id = s.name or "",
       }
     end
@@ -234,7 +286,7 @@ local function show_toggle(window, pane, state)
     act.InputSelector {
       title = "nap — Enable / Disable",
       description = "Toggle a plugin (runtime only, lost on restart)",
-      fuzzy = true,
+      fuzzy = ui_cfg.fuzzy,
       choices = choices,
       action = wezterm.action_callback(function(_w, _p, id, _label)
         if not id then
@@ -243,7 +295,7 @@ local function show_toggle(window, pane, state)
 
         for _, s in ipairs(state.resolved) do
           if s.name == id then
-            local was_enabled = apply.is_enabled(s, state.env)
+            local was_enabled = apply.is_enabled(s)
             s.enabled = not was_enabled
             local new_status = s.enabled and "enabled" or "disabled"
             util.info(
@@ -267,6 +319,8 @@ end
 ---@param pane table
 ---@param state table
 local function show_open_dir(window, pane, state)
+  local ui_cfg = get_ui_config(state)
+  local colorscheme = get_active_colorscheme()
   local choices = {}
   for _, s in ipairs(state.resolved) do
     if not s.import and s._resolved_url then
@@ -277,7 +331,7 @@ local function show_open_dir(window, pane, state)
             { Attribute = { Intensity = "Bold" } },
             { Text = s.name or "<unnamed>" },
             { Attribute = { Intensity = "Normal" } },
-            { Foreground = { AnsiColor = "Fuchsia" } },
+            { Foreground = resolve_color("path", colorscheme) },
             { Text = "  " .. plugin_dir },
           },
           id = s.name or "",
@@ -295,7 +349,7 @@ local function show_open_dir(window, pane, state)
     act.InputSelector {
       title = "nap — Open Plugin Directory",
       description = "Select a plugin to open its directory in a new tab",
-      fuzzy = true,
+      fuzzy = ui_cfg.fuzzy,
       choices = choices,
       action = wezterm.action_callback(function(w, p, id, _label)
         if not id then
@@ -326,27 +380,29 @@ end
 
 ---Build the top-level choices list.
 ---Deferred to call-time so that wezterm.nerdfonts is fully available.
+---@param colorscheme? table active colorscheme (optional)
 ---@return table[]
-local function build_top_choices()
+local function build_top_choices(colorscheme)
+  colorscheme = colorscheme or get_active_colorscheme()
   return {
     {
-      label = colored("Blue", nf("fa_list_ul", "*"), "Status"),
+      label = colored("accent", nf("fa_list_ul", "*"), "Status", colorscheme),
       id = "status",
     },
     {
-      label = colored("Green", nf("fa_refresh", "*"), "Update All"),
+      label = colored("enabled", nf("fa_refresh", "*"), "Update All", colorscheme),
       id = "update_all",
     },
     {
-      label = colored("Red", nf("fa_trash", "*"), "Uninstall"),
+      label = colored("warning", nf("fa_trash", "*"), "Uninstall", colorscheme),
       id = "uninstall",
     },
     {
-      label = colored("Yellow", nf("fa_toggle_on", "*"), "Enable / Disable"),
+      label = colored("accent", nf("fa_toggle_on", "*"), "Enable / Disable", colorscheme),
       id = "toggle",
     },
     {
-      label = colored("Fuchsia", nf("fa_folder_open", "*"), "Open Directory"),
+      label = colored("path", nf("fa_folder_open", "*"), "Open Directory", colorscheme),
       id = "open_dir",
     },
   }
@@ -355,14 +411,16 @@ end
 ---Open the top-level plugin manager UI.
 ---@param window table   WezTerm Window object
 ---@param pane table     WezTerm Pane object
----@param state table    internal nap state (resolved, env, lockfile_path, lock_data)
+---@param state table    internal nap state (resolved, nap_config, lockfile_path, lock_data)
 function M.open(window, pane, state)
+  local ui_cfg = get_ui_config(state)
+  local colorscheme = get_active_colorscheme()
   window:perform_action(
     act.InputSelector {
       title = "nap — Plugin Manager",
       description = "Select an action",
-      fuzzy = true,
-      choices = build_top_choices(),
+      fuzzy = ui_cfg.fuzzy,
+      choices = build_top_choices(colorscheme),
       action = wezterm.action_callback(function(w, p, id, _label)
         if not id then
           return
@@ -384,5 +442,12 @@ function M.open(window, pane, state)
     pane
   )
 end
+
+-- Export public operations for direct action binding
+M.show_status = show_status
+M.show_uninstall = show_uninstall
+M.show_toggle = show_toggle
+M.show_open_dir = show_open_dir
+M.do_update_all = do_update_all
 
 return M

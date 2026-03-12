@@ -6,15 +6,14 @@ local M = {}
 
 ---Resolve whether a spec is enabled.
 ---@param s table
----@param env table
 ---@return boolean
-function M.is_enabled(s, env)
+function M.is_enabled(s)
   local enabled = s.enabled
   if enabled == nil then
     return true
   end
   if type(enabled) == "function" then
-    local ok, result = pcall(enabled, env)
+    local ok, result = pcall(enabled)
     if not ok then
       util.error(
         ("error evaluating enabled for '%s': %s")
@@ -50,14 +49,13 @@ end
 ---Run the apply pipeline: sort, require, call apply_to_config or config fn.
 ---@param config table   WezTerm config builder
 ---@param specs table[]  merged and normalized specs
----@param env table      environment table from setup opts
-function M.run(config, specs, env)
+function M.run(config, specs)
   local sorted = M.sort(specs)
 
   for _, s in ipairs(sorted) do
     local label = s.name or "<unnamed>"
 
-    if not M.is_enabled(s, env) then
+    if not M.is_enabled(s) then
       util.info(("skipping disabled plugin '%s'"):format(label))
       goto continue
     end

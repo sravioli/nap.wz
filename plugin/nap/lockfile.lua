@@ -42,9 +42,11 @@ end
 
 ---Write a lockfile from current plugin state.
 ---Matches resolved spec names against installed plugins via wezterm.plugin.list().
+---Includes reproducibility fields (commit_sha) and update check metadata.
 ---@param path string
 ---@param specs table[] resolved specs
-function M.write(path, specs)
+---@param last_check_time? number unix timestamp of last update check
+function M.write(path, specs, last_check_time)
   local abs = M.resolve_path(path)
 
   -- Build url -> name map from resolved specs
@@ -60,9 +62,19 @@ function M.write(path, specs)
   for _, p in ipairs(wezterm.plugin.list()) do
     local name = url_map[p.url]
     if name then
+      -- Capture commit_sha if available (for reproducibility)
+      local commit_sha = nil
+      if p.commit_sha then
+        commit_sha = p.commit_sha
+      elseif p.version then
+        -- Fallback to version if commit_sha is not available
+        commit_sha = p.version
+      end
+
       entries[name] = {
         url = p.url,
         plugin_dir = p.plugin_dir,
+        commit_sha = commit_sha,
       }
     end
   end
@@ -74,12 +86,17 @@ function M.write(path, specs)
   end
   table.sort(keys)
 
-  -- Serialize as a Lua table
+  -- Serialize as a Lua table with extended schema
   local lines = { "return {" }
   for _, name in ipairs(keys) do
     local e = entries[name]
-    lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s" },')
-      :format(name, e.url, e.plugin_dir)
+    if e.commit_sha then
+      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s", commit_sha = "%s" },')
+        :format(name, e.url, e.plugin_dir, e.commit_sha)
+    else
+      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s" },')
+        :format(name, e.url, e.plugin_dir)
+    end
   end
   lines[#lines + 1] = "}"
 
@@ -120,8 +137,13 @@ function M.remove_entry(path, name)
   local lines = { "return {" }
   for _, k in ipairs(keys) do
     local e = data[k]
-    lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s" },')
-      :format(k, e.url, e.plugin_dir)
+    if e.commit_sha then
+      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s", commit_sha = "%s" },')
+        :format(k, e.url, e.plugin_dir, e.commit_sha)
+    else
+      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s" },')
+        :format(k, e.url, e.plugin_dir)
+    end
   end
   lines[#lines + 1] = "}"
 

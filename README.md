@@ -52,8 +52,9 @@ The simplest setup - everything in your `~/.wezterm.lua`:
 local wezterm = require "wezterm"
 local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
 
-return nap.setup(wezterm.config_builder(), {
-  spec = {
+return nap.setup(
+  wezterm.config_builder(),
+  {
     -- GitHub shorthand
     { "owner/status-bar.wezterm", opts = { location = "right" } },
 
@@ -62,11 +63,14 @@ return nap.setup(wezterm.config_builder(), {
 
     -- Only on work machines
     { "owner/work-tools.wezterm",
-      enabled = function(env) return env.hostname:match "work%-laptop" end,
+      enabled = function() return wezterm.hostname():match "work%-laptop" end,
     },
   },
-  env = { hostname = wezterm.hostname() },
-})
+  {
+    lockfile = "nap-lock.lua",
+    integrations = { input_selector = true, command_palette = false },
+  }
+)
 ```
 
 ### Structured (Recommended)
@@ -79,17 +83,21 @@ Split your specs into modules for better organization:
 local wezterm = require "wezterm"
 local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
 
-return nap.setup(wezterm.config_builder(), {
-  spec = {
+return nap.setup(
+  wezterm.config_builder(),
+  {
     { import = "plugins.ui" },
     { import = "plugins.tools" },
 
     -- Local overrides still work here
     { "owner/status-bar.wezterm", opts = { theme = "catppuccin" } },
   },
-  env = { hostname = wezterm.hostname() },
-  lockfile = "nap-lock.lua",
-})
+  {
+    lockfile = "nap-lock.lua",
+    integrations = { input_selector = true, command_palette = false },
+    ui = { fuzzy = true, icons = true },
+  }
+)
 ```
 
 **`~/.config/wezterm/plugins/ui.lua`**
@@ -107,9 +115,38 @@ return {
 return {
   { "owner/session-manager.wezterm" },
   { "company/work-tools.wezterm",
-    enabled = function(env) return env.hostname:match "work%-laptop" end,
+    enabled = function() return wezterm.hostname():match "work%-laptop" end,
   },
 }
+```
+
+### With Update Checks and Command Palette
+
+Enable update checking and command palette integration:
+
+```lua
+local wezterm = require "wezterm"
+local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+
+return nap.setup(
+  wezterm.config_builder(),
+  { "owner/plugin.wezterm" },
+  {
+    lockfile = "nap-lock.lua",
+    updates = {
+      enabled = true,
+      interval_hours = 24,
+      timeout_ms = 5000,
+    },
+    integrations = {
+      input_selector = true,
+      command_palette = true,
+    },
+    keymaps = {
+      toggle_input = { mods = "CTRL|SHIFT", key = "m" },
+    },
+  }
+)
 ```
 
 ## Plugin Spec
@@ -368,6 +405,85 @@ listing the applicable plugins.
 > **Note:** Enable/Disable changes are runtime-only. To permanently
 > disable a plugin, set `enabled = false` in your spec.
 
+## Events
+
+nap emits WezTerm events for plugin update checks and other lifecycle events.
+You can consume these events in your WezTerm config to build custom UI (like
+status bar badges) or trigger actions.
+
+### Update Check Events
+
+When update checks are enabled, nap emits the following events:
+
+#### `nap-updates-checked`
+
+Emitted when an update check completes (with or without updates available).
+
+**Payload:**
+```lua
+{
+  check_time = os.time(),           -- Unix timestamp of check
+  update_count = 2,                 -- Number of plugins with updates
+  plugins = {"plugin1", "plugin2"}, -- List of plugin names with updates
+  error = nil,                      -- Error message if check failed
+}
+```
+
+#### `nap-updates-available`
+
+Emitted only if updates are found (subset of `nap-updates-checked`).
+
+**Payload:** Same as `nap-updates-checked`
+
+#### `nap-update-check-error`
+
+Emitted if the update check encounters an error.
+
+**Payload:** Same as `nap-updates-checked` (with `error` field populated)
+
+### Example: Status Bar Badge
+
+Display an indicator in your WezTerm status bar showing available updates:
+
+```lua
+local wezterm = require "wezterm"
+
+wezterm.on("nap-updates-available", function(window, pane, payload)
+  window:set_right_status(
+    wezterm.format {
+      { Foreground = { AnsiColor = "Yellow" } },
+      { Text = " ◆ " .. payload.update_count .. " updates" },
+    }
+  )
+end)
+
+wezterm.on("nap-update-check-error", function(window, pane, payload)
+  window:set_right_status(
+    wezterm.format {
+      { Foreground = { AnsiColor = "Red" } },
+      { Text = " ✗ Update check failed" },
+    }
+  )
+end)
+```
+
+### Example: Custom Reaction
+
+Trigger other actions when updates are available:
+
+```lua
+local wezterm = require "wezterm"
+
+wezterm.on("nap-updates-available", function(window, pane, payload)
+  -- Log available updates
+  wezterm.log_info(
+    "Updates available for: " .. table.concat(payload.plugins, ", ")
+  )
+
+  -- Optionally, show a notification or other custom behavior
+end)
+```
+
 ## Pipeline
 
 When `setup()` is called, nap runs this pipeline:
@@ -391,6 +507,74 @@ nap resolves plugin URLs with the following precedence:
 | `url` set | `url` as-is |
 | `"owner/repo"` shorthand | `https://github.com/owner/repo` |
 | `dir` set | `file://` from `dir` |
+
+## Migration Guide
+
+### From Old API to New API
+
+If you're using an older version of nap.wz, here's how to migrate to the new
+`setup(config, specs, nap_opts)` signature:
+
+**Before (Old API):**
+
+```lua
+return nap.setup(wezterm.config_builder(), {
+  spec = { ... plugins ... },
+  env = { hostname = wezterm.hostname() },
+  lockfile = "nap-lock.lua",
+})
+```
+
+**After (New API):**
+
+```lua
+return nap.setup(
+  wezterm.config_builder(),
+  { ... plugins ... },                    -- specs as second argument
+  {
+    lockfile = "nap-lock.lua",
+    integrations = { input_selector = true, command_palette = false },
+    ui = { fuzzy = true, icons = true },
+  }
+)
+```
+
+### Key Changes
+
+1. **Specs as second argument**: Plugin specs are now the second parameter, not nested in
+   `spec = { ... }`.
+
+2. **No `env` parameter**: Remove `env` from your setup. Plugins now access `wezterm` directly
+   in callbacks:
+
+   **Before:**
+   ```lua
+   enabled = function(env) return env.hostname:match "work%" end
+   ```
+
+   **After:**
+   ```lua
+   enabled = function() return wezterm.hostname():match "work%" end
+   ```
+
+3. **Configuration in third parameter**: `lockfile`, `integrations`, `keymaps`, `updates`,
+   and `ui` settings now go in `nap_opts` (the third parameter).
+
+4. **Lockfile shorthand**: You can pass `lockfile` as a string directly:
+
+   ```lua
+   nap.setup(config, specs, { lockfile = "nap-lock.lua" })
+   ```
+
+5. **Enabled callbacks**: Update enabled functions to remove `env` parameter:
+
+   ```lua
+   -- Old
+   enabled = function(env) ... end
+
+   -- New
+   enabled = function() ... end  -- or omit it and use direct wezterm access
+   ```
 
 ## Non-Goals (v1)
 

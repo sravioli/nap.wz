@@ -60,10 +60,9 @@ end
 
 ---Normalize a raw spec entry: resolve URL, derive name, apply defaults.
 ---@param raw table
----@param defaults table
 ---@param index integer  declaration order
 ---@return table
-function M.normalize(raw, defaults, index)
+function M.normalize(raw, index)
   local s = {}
 
   -- Copy non-integer keys
@@ -87,12 +86,12 @@ function M.normalize(raw, defaults, index)
     end
   end
 
-  -- Apply defaults
+  -- Apply built-in defaults
   if s.enabled == nil then
-    s.enabled = defaults.enabled
+    s.enabled = true
   end
   if s.priority == nil then
-    s.priority = defaults.priority or 0
+    s.priority = 0
   end
 
   return s
@@ -108,7 +107,16 @@ function M.validate(s)
   end
   if not s._resolved_url then
     local label = s.name or s._shorthand or "<unnamed>"
-    return false, ("spec '%s' has no resolvable URL"):format(label)
+    local msg = ("spec '%s' has no resolvable URL"):format(label)
+
+    -- Provide hints based on what's missing
+    if not s._shorthand and not s.url and not s.dir then
+      msg = msg .. "; provide 'url', 'dir', or use shorthand 'owner/repo'"
+    elseif s.dir and not s.url then
+      msg = msg .. "; 'dev = true' is needed to use local 'dir' without a remote 'url'"
+    end
+
+    return false, msg
   end
   return true, nil
 end
