@@ -24,6 +24,7 @@ Declare your plugins. nap handles the rest.
 - **Dev mode** - swap between remote and local checkout with `dev = true`
 - **Advisory lockfile** - snapshot installed plugin state for reproducibility
 - **Zero bootstrap** - ships as a native WezTerm plugin, no custom git logic
+- **Plugin Manager UI** - `InputSelector`-based interface for status, update, uninstall, and more
 
 ## Installation
 
@@ -321,6 +322,52 @@ Reads and returns the lockfile contents.
 
 Updates all plugins via WezTerm's native mechanism and rewrites the lockfile.
 
+### `nap.action()` → `action`
+
+Returns a WezTerm action that opens the nap plugin manager UI (see
+[Plugin Manager UI](#plugin-manager-ui) below). Bind it to any key:
+
+```lua
+config.keys = {
+  { key = "p", mods = "LEADER", action = nap.action() },
+}
+```
+
+## Plugin Manager UI
+
+nap includes a built-in management interface powered by WezTerm's
+`InputSelector`. Open it by binding `nap.action()` to a key:
+
+```lua
+local wezterm = require "wezterm"
+local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+
+local config = wezterm.config_builder()
+nap.setup(config, { spec = { ... } })
+
+config.keys = {
+  { key = "p", mods = "LEADER", action = nap.action() },
+}
+
+return config
+```
+
+The first selector presents the available operations:
+
+| Operation | Description |
+|---|---|
+| **Status** | List all managed plugins with name, URL, priority, and enabled state |
+| **Update All** | Run `wezterm.plugin.update_all()` and rewrite the lockfile |
+| **Uninstall** | Pick a plugin to delete from disk and remove from the lockfile |
+| **Enable / Disable** | Toggle a plugin at runtime (does not persist across restarts) |
+| **Open Directory** | Open a plugin's clone directory in a new terminal tab |
+
+Selecting an operation that targets a specific plugin opens a second selector
+listing the applicable plugins.
+
+> **Note:** Enable/Disable changes are runtime-only. To permanently
+> disable a plugin, set `enabled = false` in your spec.
+
 ## Pipeline
 
 When `setup()` is called, nap runs this pipeline:
@@ -350,7 +397,6 @@ nap resolves plugin URLs with the following precedence:
 nap is intentionally simpler than lazy.nvim:
 
 - **No lazy loading** - no `event`, `ft`, `cmd`, `keys` equivalents
-- **No UI** - no interactive dashboard
 - **No dependency graph** - ordering is via `priority` only
 - **No recursive imports** - imports are top-level only
 - **No strict lockfile enforcement** - advisory snapshots only

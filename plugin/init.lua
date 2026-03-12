@@ -30,6 +30,12 @@ local merge = require "nap.merge"
 local spec = require "nap.spec"
 local util = require "nap.util"
 
+local ui_ok, ui = pcall(require, "nap.ui")
+if not ui_ok then
+  util.warn("could not load UI module: " .. tostring(ui))
+  ui = nil
+end
+
 local M = {}
 
 --- Internal state persisted across calls.
@@ -149,6 +155,31 @@ function M.update_all_and_lock()
   wezterm.plugin.update_all()
   M.write_lockfile()
   util.info "updated all plugins and wrote lockfile"
+end
+
+---Return a reference to the internal state table.
+---Intended for internal use by the UI module.
+---@return table
+function M._get_state()
+  return _state
+end
+
+---Return a WezTerm action that opens the nap plugin manager UI.
+---Bind this to a key in your config:
+---```lua
+---config.keys = {
+---  { key = "p", mods = "LEADER", action = nap.action() },
+---}
+---```
+---@return table action  a wezterm.action_callback
+function M.action()
+  if not ui then
+    util.error "UI module not available; nap.action() is a no-op"
+    return wezterm.action.Nop
+  end
+  return wezterm.action_callback(function(window, pane)
+    ui.open(window, pane, _state)
+  end)
 end
 
 return M

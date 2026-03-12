@@ -95,4 +95,46 @@ function M.write(path, specs)
   util.info(("wrote lockfile to '%s'"):format(abs))
 end
 
+---Remove a plugin entry from the lockfile by name.
+---Reads the lockfile, deletes the matching key, and rewrites the file.
+---@param path string   lockfile path
+---@param name string   plugin name to remove
+---@return boolean ok   true if found and removed
+function M.remove_entry(path, name)
+  local data = M.read(path)
+  if not data or not data[name] then
+    util.warn(("plugin '%s' not found in lockfile"):format(name))
+    return false
+  end
+
+  data[name] = nil
+
+  -- Rewrite the lockfile from the remaining data
+  local abs = M.resolve_path(path)
+  local keys = {}
+  for k in pairs(data) do
+    keys[#keys + 1] = k
+  end
+  table.sort(keys)
+
+  local lines = { "return {" }
+  for _, k in ipairs(keys) do
+    local e = data[k]
+    lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s" },')
+      :format(k, e.url, e.plugin_dir)
+  end
+  lines[#lines + 1] = "}"
+
+  local content = table.concat(lines, "\n") .. "\n"
+  local f, err = io.open(abs, "w")
+  if not f then
+    util.error(("could not write lockfile '%s': %s"):format(abs, err))
+    return false
+  end
+  f:write(content)
+  f:close()
+  util.info(("removed '%s' from lockfile"):format(name))
+  return true
+end
+
 return M

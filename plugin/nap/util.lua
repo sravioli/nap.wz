@@ -76,4 +76,22 @@ function M.dedupe(list)
   return result
 end
 
+---Check if the current OS is Windows.
+---@return boolean
+function M.is_windows()
+  return package.config:sub(1, 1) == "\\"
+end
+
+---Find the plugin_dir for a given resolved URL by searching wezterm.plugin.list().
+---@param url string  the resolved URL to match
+---@return string|nil plugin_dir  the local clone directory, or nil if not found
+function M.find_plugin_dir(url)
+  for _, p in ipairs(wezterm.plugin.list()) do
+    if p.url == url then
+      return p.plugin_dir
+    end
+  end
+  return nil
+end
+
 return M
