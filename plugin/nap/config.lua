@@ -11,13 +11,13 @@ local DEFAULTS = {
     input_selector = true,
     command_palette = false,
   },
-  keymaps = false,  -- No auto-generated keymaps by default
+  keymaps = false, -- No auto-generated keymaps by default
   updates = {
     enabled = false,
     interval_hours = 24,
     startup_delay_ms = 1000,
     timeout_ms = 5000,
-    notify = "off",  -- "off" | "log" | "event" | "both"
+    notify = "off", -- "off" | "log" | "event" | "both"
     include_prerelease = false,
   },
   lockfile = {
@@ -29,7 +29,7 @@ local DEFAULTS = {
   ui = {
     fuzzy = true,
     icons = true,
-    colorscheme = "auto",  -- "auto" | "light" | "dark" | custom table
+    colorscheme = "auto", -- "auto" | "light" | "dark" | custom table
     width = 80,
   },
 }
@@ -93,11 +93,17 @@ function M.normalize(nap_opts)
 
   -- Validate update settings
   if config.updates.enabled and config.updates.timeout_ms < 100 then
-    util.warn "update timeout is very short (" .. config.updates.timeout_ms .. "ms); consider increasing it"
+    util.warn(
+      "update timeout is very short ("
+        .. config.updates.timeout_ms
+        .. "ms); consider increasing it"
+    )
   end
 
   -- Validate UI settings
-  if type(config.ui.colorscheme) ~= "string" and type(config.ui.colorscheme) ~= "table" then
+  if
+    type(config.ui.colorscheme) ~= "string" and type(config.ui.colorscheme) ~= "table"
+  then
     util.warn "ui.colorscheme should be a string or table; using default 'auto'"
     config.ui.colorscheme = "auto"
   end
