@@ -133,7 +133,7 @@ end
 local SEMANTIC_COLORS = {
   enabled = "Green", -- indicates enabled/success state
   disabled = "Red", -- indicates disabled/inactive state
-  accent = "Cyan", -- highlights and links
+  accent = "Aqua", -- highlights and links
   muted = "Gray", -- secondary text
   path = "Fuchsia", -- file/directory paths
   priority = "Teal", -- metadata like priority
