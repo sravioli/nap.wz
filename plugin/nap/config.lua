@@ -1,158 +1,168 @@
----Configuration normalization and defaults for nap options.
+---Configuration normalization for nap options.
+---The CONFIG_SCHEMA is the single source of truth for defaults and validation.
+---All user options are optional; apply_defaults() fills in every field.
 
-local util = require "nap.util"
+local schema = require "nap.schema"
+local u = require "nap.util" ---@type Nap.Util
 
 local M = {}
 
----Default nap options.
+---Schema for nap configuration.
+---Every leaf field carries a `default`, so apply_defaults({}, CONFIG_SCHEMA)
+---yields a fully-populated config without any user input.
 ---@type table
-local DEFAULTS = {
-  integrations = {
-    input_selector = true,
-    command_palette = false,
+local CONFIG_SCHEMA = {
+  log_level = {
+    type = "string",
+    default = "warn",
+    enum = { "debug", "info", "warn", "error" },
   },
-  keymaps = false, -- No auto-generated keymaps by default
-  updates = {
-    enabled = false,
-    interval_hours = 24,
-    startup_delay_ms = 1000,
-    timeout_ms = 5000,
-    notify = "off", -- "off" | "log" | "event" | "both"
-    include_prerelease = false,
+  integrations = {
+    type = "table",
+    fields = {
+      input_selector = { type = "boolean", default = true },
+      command_palette = { type = "boolean", default = false },
+    },
+  },
+  ---keymaps is false (opt-out) or a table (opt-in config).
+  keymaps = {
+    types = { "boolean", "table" },
+    default = false,
+  },
+  dev = {
+    type = "table",
+    fields = {
+      path = { type = "string", default = "~/projects" },
+      patterns = { type = "table", default = {} },
+      fallback = { type = "boolean", default = false },
+    },
+  },
+  install = {
+    type = "table",
+    fields = {
+      missing = { type = "boolean", default = true },
+      auto_clean = { type = "boolean", default = false },
+    },
   },
   lockfile = {
-    enabled = false,
-    path = nil,
-    write_on_update = true,
-    pin_commits = true,
+    type = "string",
+  },
+  updates = {
+    type = "table",
+    fields = {
+      enabled = { type = "boolean", default = false },
+      interval_hours = { type = "number", default = 24, min = 1 },
+      startup_delay_ms = { type = "number", default = 1000, min = 0 },
+      timeout_ms = { type = "number", default = 5000, min = 100 },
+      notify = {
+        type = "string",
+        default = "off",
+        enum = { "off", "log", "event", "both" },
+      },
+      include_prerelease = { type = "boolean", default = false },
+      retry_count = { type = "number", default = 0, min = 0 },
+      retry_delay_ms = { type = "number", default = 500, min = 0 },
+      concurrency = { type = "number", default = nil, min = 1 },
+      cooldown_s = { type = "number", default = 0, min = 0 },
+    },
   },
   ui = {
-    fuzzy = true,
-    icons = true,
-    colorscheme = "auto", -- "auto" | "light" | "dark" | custom table
-    width = 80,
+    type = "table",
+    fields = {
+      fuzzy = { type = "boolean", default = true },
+      icons = {
+        types = { "boolean", "table" },
+        default = true,
+      },
+      colorscheme = { types = { "string", "table" }, default = "auto" },
+      height = { type = "number", default = nil },
+      show_url = { type = "boolean", default = true },
+      show_priority = { type = "boolean", default = true },
+    },
+  },
+  specs = {
+    type = "table",
+    fields = {
+      defaults = {
+        type = "table",
+        fields = {
+          enabled = { type = "boolean", default = true },
+          priority = { type = "number", default = 0 },
+        },
+      },
+    },
   },
 }
 
----Deep copy table.
----@param t table
----@return table
-local function deep_copy(t)
-  if type(t) ~= "table" then
-    return t
-  end
-  local clone = {}
-  for k, v in pairs(t) do
-    clone[k] = deep_copy(v)
-  end
-  return clone
-end
-
----Merge two tables, preferring values from override.
----@param base table
----@param override table
----@return table
-local function merge_tables(base, override)
-  local result = deep_copy(base)
-  if not override then
-    return result
-  end
-  for k, v in pairs(override) do
-    if type(v) == "table" and type(result[k]) == "table" then
-      result[k] = merge_tables(result[k], v)
-    else
-      result[k] = v
-    end
-  end
-  return result
-end
-
----Validate that a nap_opts field is a table, logging an error and returning nil on failure.
----@param key string  field name, for the error message
----@param value any   the value to check
----@return table|nil  the value if valid, nil otherwise
-local function expect_table(key, value)
-  if value == nil then
-    return nil -- missing is fine; defaults will apply
-  end
-  if type(value) ~= "table" then
-    util.error(
-      ("nap_opts.%s must be a table, got %s — ignoring and using defaults"):format(
-        key,
-        type(value)
-      )
-    )
-    return nil
-  end
-  return value
-end
-
----Normalize and validate nap_opts, applying defaults.
+---Normalize and validate nap_opts, applying schema defaults.
+---Bad values are logged but never thrown; defaults are always applied.
 ---@param nap_opts table? Raw nap options from setup()
----@return table normalized config
+---@return table normalized config (fully populated with defaults)
 function M.normalize(nap_opts)
-  nap_opts = nap_opts or {}
+  if nap_opts == nil then
+    return schema.apply_defaults({}, CONFIG_SCHEMA)
+  end
 
   if type(nap_opts) ~= "table" then
-    util.error(
-      ("nap_opts must be a table, got %s — using all defaults"):format(type(nap_opts))
-    )
-    nap_opts = {}
+    u.log.error("nap_opts must be a table, got %s — using all defaults", type(nap_opts))
+    return schema.apply_defaults({}, CONFIG_SCHEMA)
   end
 
-  -- Validate each table-valued field up front so merge_tables never receives a non-table.
-  local integrations = expect_table("integrations", nap_opts.integrations)
-  local updates      = expect_table("updates",      nap_opts.updates)
-  local lockfile_opt = expect_table("lockfile",     nap_opts.lockfile)
-  local ui           = expect_table("ui",           nap_opts.ui)
-
-  -- keymaps is allowed to be false (opt-out) or a table (opt-in config)
-  local keymaps = nap_opts.keymaps
-  if keymaps ~= nil and keymaps ~= false and type(keymaps) ~= "table" then
-    util.error(
-      ("nap_opts.keymaps must be false or a table, got %s — using default"):format(
-        type(keymaps)
-      )
-    )
-    keymaps = nil
+  -- Work on a shallow copy to avoid mutating the caller's table.
+  local opts = {}
+  for k, v in pairs(nap_opts) do
+    opts[k] = v
   end
 
-  local config = {
-    integrations = merge_tables(DEFAULTS.integrations, integrations),
-    keymaps      = keymaps ~= nil and keymaps or DEFAULTS.keymaps,
-    updates      = merge_tables(DEFAULTS.updates,      updates),
-    lockfile     = merge_tables(DEFAULTS.lockfile,     lockfile_opt),
-    ui           = merge_tables(DEFAULTS.ui,           ui),
-  }
-
-  -- Validate lockfile sub-fields
-  if config.lockfile.path and type(config.lockfile.path) ~= "string" then
-    util.error "nap_opts.lockfile.path must be a string — ignoring"
-    config.lockfile.path = nil
+  -- Pre-check: detect bad types and nil them out so apply_defaults fills in
+  -- the correct default. Logs an error for each so the user knows.
+  for field, descriptor in pairs(CONFIG_SCHEMA) do
+    local v = opts[field]
+    if v ~= nil then
+      local allowed = descriptor.types or (descriptor.type and { descriptor.type } or nil)
+      if allowed then
+        local matched = false
+        for _, t in ipairs(allowed) do
+          if type(v) == t then
+            matched = true
+            break
+          end
+        end
+        if not matched then
+          u.log.error(
+            "nap_opts.%s must be %s, got %s — ignoring and using defaults",
+            field,
+            table.concat(allowed, "|"),
+            type(v)
+          )
+          opts[field] = nil
+        end
+      end
+    end
   end
 
-  -- Validate updates sub-fields
-  if config.updates.enabled and config.updates.timeout_ms < 100 then
-    util.warn(
-      ("nap_opts.updates.timeout_ms is very short (%dms); consider a value ≥ 1000"):format(
-        config.updates.timeout_ms
-      )
-    )
-  end
+  local config = schema.apply_defaults(opts, CONFIG_SCHEMA)
 
-  -- Validate UI sub-fields
-  if type(config.ui.colorscheme) ~= "string" and type(config.ui.colorscheme) ~= "table" then
-    util.error "nap_opts.ui.colorscheme must be a string or table — using default 'auto'"
-    config.ui.colorscheme = "auto"
+  local ok, errors = schema.validate(config, CONFIG_SCHEMA, "nap_opts")
+  if not ok then
+    for _, err in ipairs(errors) do
+      u.log.error(err)
+    end
   end
 
   return config
 end
 
----Get the default configuration.
+---Return the schema definition (for introspection or testing).
+---@return table
+function M.schema()
+  return CONFIG_SCHEMA
+end
+
+---Return a fully-defaulted config (all user opts absent).
 ---@return table
 function M.defaults()
-  return deep_copy(DEFAULTS)
+  return schema.apply_defaults({}, CONFIG_SCHEMA)
 end
 
 return M

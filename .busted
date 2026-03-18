@@ -1,0 +1,10 @@
+return {
+  _all = {
+    verbose = true,
+    helper  = "spec/support/setup.lua",
+  },
+  default = {
+    ["ROOT"] = { "spec" },
+    pattern  = "_spec",
+  },
+}

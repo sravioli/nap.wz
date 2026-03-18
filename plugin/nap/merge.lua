@@ -1,4 +1,4 @@
-local util = require "nap.util"
+local u = require "nap.util" ---@type Nap.Util
 
 local M = {}
 
@@ -10,6 +10,10 @@ local SCALAR_FIELDS = {
   "enabled",
   "priority",
   "config",
+  "branch",
+  "tag",
+  "commit",
+  "dependencies",
   "_shorthand",
   "_resolved_url",
 }
@@ -39,7 +43,7 @@ function M.merge(specs)
 
       -- Deep-merge opts
       if s.opts and existing.opts then
-        existing.opts = util.deep_merge(existing.opts, s.opts)
+        existing.opts = u.tbl.deep_merge(existing.opts, s.opts)
       elseif s.opts then
         existing.opts = s.opts
       end
@@ -50,7 +54,7 @@ function M.merge(specs)
         for _, g in ipairs(s.groups) do
           existing.groups[#existing.groups + 1] = g
         end
-        existing.groups = util.dedupe(existing.groups)
+        existing.groups = u.tbl.dedupe(existing.groups)
       end
 
       -- Override scalar fields

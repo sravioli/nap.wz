@@ -16,13 +16,17 @@ Declare your plugins. nap handles the rest.
 
 - **Declarative specs** - `"owner/repo"` shorthand, just like lazy.nvim
 - **GitHub by default** - `"owner/repo"` auto-expands to `https://github.com/owner/repo`
+- **Version pinning** - lock plugins to a `branch`, `tag`, or `commit`
+- **Dependencies** - declare per-plugin dependencies with automatic ordering and cycle detection
 - **Merge & override** - re-declare a plugin by name to override options across modules
 - **Split configs** - organize specs into importable Lua modules
 - **Priority ordering** - control plugin execution order with `priority`
 - **Conditional loading** - enable/disable plugins based on hostname, OS, etc.
 - **Custom apply** - override how a plugin is applied with a `config` function
 - **Dev mode** - swap between remote and local checkout with `dev = true`
-- **Advisory lockfile** - snapshot installed plugin state for reproducibility
+- **Lockfile** - snapshot and restore exact plugin commits for reproducibility
+- **Orphan cleanup** - detect and remove plugins installed on disk but not declared
+- **Per-plugin updates** - update individual plugins via git fetch + merge/checkout
 - **Zero bootstrap** - ships as a native WezTerm plugin, no custom git logic
 - **Plugin Manager UI** - `InputSelector`-based interface for status, update, uninstall, and more
 
@@ -60,6 +64,9 @@ return nap.setup(
 
     -- Higher priority runs first
     { "owner/theme.wezterm", priority = 1000, opts = { theme = "dracula" } },
+
+    -- Pin to a specific tag
+    { "owner/stable-plugin.wezterm", tag = "v2.1.0" },
 
     -- Only on work machines
     { "owner/work-tools.wezterm",
@@ -160,12 +167,16 @@ Each entry in `spec` is a table describing a plugin:
 ---@field url?         string                       -- explicit full URL; overrides shorthand
 ---@field dir?         string                       -- local path (expands ~ and converts to file://)
 ---@field import?      string                       -- module name to require and splice specs from
----@field enabled?     boolean|fun(env):boolean      -- enable/disable; function receives env table
+---@field enabled?     boolean|fun():boolean         -- enable/disable; function evaluated at setup
 ---@field priority?    integer                       -- higher runs first (default: 0)
 ---@field dev?         boolean                       -- use dir as file:// URL instead of remote
 ---@field groups?      string[]                      -- optional tags for organization
 ---@field opts?        table                         -- passed to plugin.apply_to_config(config, opts)
 ---@field config?      fun(plugin, config, opts)     -- custom apply; replaces default apply_to_config
+---@field branch?      string                       -- git branch to pin (mutually exclusive with tag/commit)
+---@field tag?         string                       -- git tag to pin (mutually exclusive with branch/commit)
+---@field commit?      string                       -- git commit SHA to pin (mutually exclusive with branch/tag)
+---@field dependencies? table                       -- list of dependency specs
 ```
 
 ### Shorthand
@@ -204,6 +215,42 @@ Switch between remote and local during development:
 -- Uses https://github.com/owner/my-plugin when dev = false or omitted
 ```
 
+### Version Pinning
+
+Lock a plugin to a specific branch, tag, or commit. Only one may be set:
+
+```lua
+-- Pin to a branch
+{ "owner/theme.wezterm", branch = "v2" }
+
+-- Pin to a tag
+{ "owner/status-bar.wezterm", tag = "v1.3.0" }
+
+-- Pin to an exact commit
+{ "owner/session-manager.wezterm", commit = "a1b2c3d" }
+```
+
+After `wezterm.plugin.require()` clones the repo, nap runs
+`git checkout <ref>` and reloads the plugin from the pinned state.
+
+### Dependencies
+
+Declare per-plugin dependencies. Dependencies are injected before their parent
+in the spec list and inherit a priority one higher than the parent:
+
+```lua
+{
+  "owner/fancy-bar.wezterm",
+  dependencies = {
+    { "owner/bar-utils.wezterm" },
+    { "owner/icon-pack.wezterm", priority = 2000 },
+  },
+}
+```
+
+Cycle detection prevents circular dependency chains. Self-references are also
+caught.
+
 ### Custom Config Function
 
 Override how a plugin is applied:
@@ -227,18 +274,9 @@ config builder, and the resolved `opts` table.
 ```lua
 {
   "owner/work-tools.wezterm",
-  enabled = function(env)
-    return env.hostname:match "work%-laptop"
+  enabled = function()
+    return wezterm.hostname():match "work%-laptop"
   end,
-}
-```
-
-The `env` table is whatever you pass in `setup()`:
-
-```lua
-env = {
-  hostname = wezterm.hostname(),
-  os = wezterm.target_triple,
 }
 ```
 
@@ -260,7 +298,7 @@ When multiple specs share the same `name`, nap merges them:
 
 - **`opts`** - deep-merged (later values override)
 - **`groups`** - concatenated and deduped
-- **Scalar fields** (`url`, `dev`, `dir`, `enabled`, `priority`, `config`) - later overrides earlier
+- **Scalar fields** (`url`, `dev`, `dir`, `enabled`, `priority`, `config`, `branch`, `tag`, `commit`, `dependencies`) - later overrides earlier
 
 This lets you import a plugin pack and override individual settings:
 
@@ -301,63 +339,90 @@ return {
 
 ## Lockfile
 
-nap supports an optional advisory lockfile to snapshot your plugin state:
+nap supports a lockfile to snapshot and restore exact plugin commits:
 
 ```lua
-nap.setup(config, {
-  spec = { ... },
+nap.setup(config, { ... }, {
   lockfile = "nap-lock.lua",
 })
 ```
 
+### Snapshot
+
+`nap.snapshot()` records the current commit SHA and branch for every resolved
+plugin and writes a Lua file to the configured `lockfile` path:
+
+```lua
+-- nap-lock.lua (generated)
+return {
+  ["owner/status-bar"] = {
+    url = "https://github.com/owner/status-bar.wezterm",
+    commit = "a1b2c3d4e5f6...",
+    branch = "main",
+  },
+}
+```
+
+### Restore
+
+`nap.restore()` reads the lockfile and checks out each plugin to the recorded
+commit via `git fetch` + `git checkout`. Plugins missing from the lockfile or
+without a matching spec are skipped.
+
 ### Helpers
 
-| Method | Description |
-|---|---|
-| `nap.write_lockfile(path?)` | Write current plugin state to the lockfile |
-| `nap.read_lockfile(path?)` | Read and return lockfile contents |
-| `nap.update_all_and_lock()` | Run `wezterm.plugin.update_all()` then rewrite the lockfile |
-| `nap.status()` | Return resolved specs, env, and lock data for debugging |
-
-The lockfile is **advisory only** - it records plugin URLs and directories for
-visibility and reproducibility but does not enforce specific commits. Strict
-pinning may be added in a future version.
+| Method                | Description                                             |
+| --------------------- | ------------------------------------------------------- |
+| `nap.snapshot(path?)` | Write current commit SHAs to the lockfile               |
+| `nap.restore(path?)`  | Restore plugins to the commits recorded in the lockfile |
 
 ## Full API
 
-### `nap.setup(config, opts)` → `config`
+### `nap.setup(config, specs, nap_opts?)` → `config`
 
-The main entry point. Declares specs, resolves imports, merges, and applies all
-enabled plugins to the config.
+The main entry point. Declares specs, resolves imports, expands dependencies,
+merges, and applies all enabled plugins to the config.
 
-| Option | Type | Description |
-|---|---|---|
-| `spec` | `WezPluginSpec[]` | List of plugin specs and/or imports |
-| `defaults` | `table?` | Default `enabled` and `priority` for all specs |
-| `env` | `table?` | Environment info passed to `enabled` functions |
-| `lockfile` | `string?` | Path to advisory lockfile (relative to config dir) |
+| Parameter  | Type              | Description                                     |
+| ---------- | ----------------- | ----------------------------------------------- |
+| `config`   | `table`           | WezTerm config builder                          |
+| `specs`    | `WezPluginSpec[]` | List of plugin specs and/or imports             |
+| `nap_opts` | `table?`          | nap configuration (lockfile, updates, UI, etc.) |
 
 Returns the mutated config.
 
-### `nap.apply_to_config(config, opts)` → `config`
+### `nap.apply_to_config(config, opts?)` → `config`
 
-Alias for `setup()`. Allows nap.wz to be used like any other WezTerm plugin.
+WezTerm plugin protocol compatibility wrapper. Delegates to `setup()` with
+empty specs and the provided opts.
 
 ### `nap.status()` → `table`
 
-Returns `{ specs, env, lock_data }` for debugging.
+Returns `{ specs, nap_config }` for debugging.
 
-### `nap.write_lockfile(path?)`
+### `nap.update_all()`
 
-Writes the current plugin state to disk.
+Updates every declared plugin individually via `git fetch` +
+`git merge --ff-only` (or `git checkout <ref>` for pinned plugins).
 
-### `nap.read_lockfile(path?)` → `table|nil`
+### `nap.update_one(name)` → `boolean, string?`
 
-Reads and returns the lockfile contents.
+Updates a single plugin by name. Returns `(ok, err)`.
 
-### `nap.update_all_and_lock()`
+### `nap.clean()` → `table[]`
 
-Updates all plugins via WezTerm's native mechanism and rewrites the lockfile.
+Detects orphan plugins installed on disk but not in your specs. Returns a list
+of `{ url, plugin_dir, name }`. Excludes nap.wz itself.
+
+### `nap.snapshot(path?)` → `boolean, string?`
+
+Captures the current commit SHA and branch for every resolved plugin and writes
+to the lockfile. Uses `nap_opts.lockfile` as the default path.
+
+### `nap.restore(path?)` → `table?`
+
+Reads the lockfile and restores each plugin to its recorded commit via
+`git fetch` + `git checkout`. Returns per-plugin results `{ [name] = { ok, from_sha?, to_sha? } }`.
 
 ### `nap.action()` → `action`
 
@@ -370,6 +435,23 @@ config.keys = {
 }
 ```
 
+### Action Factories
+
+Each operation is also available as a standalone action:
+
+| Factory                   | Description                     |
+| ------------------------- | ------------------------------- |
+| `nap.action()`            | Open the full plugin manager UI |
+| `nap.action_status()`     | Show plugin status              |
+| `nap.action_update_all()` | Update all plugins              |
+| `nap.action_update_one()` | Per-plugin update picker        |
+| `nap.action_uninstall()`  | Plugin uninstall picker         |
+| `nap.action_toggle()`     | Enable/disable picker           |
+| `nap.action_open_dir()`   | Open plugin directory picker    |
+| `nap.action_clean()`      | Orphan cleanup picker           |
+| `nap.action_snapshot()`   | Take a lockfile snapshot        |
+| `nap.action_restore()`    | Restore from lockfile           |
+
 ## Plugin Manager UI
 
 nap includes a built-in management interface powered by WezTerm's
@@ -380,7 +462,7 @@ local wezterm = require "wezterm"
 local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
 
 local config = wezterm.config_builder()
-nap.setup(config, { spec = { ... } })
+nap.setup(config, { "owner/plugin.wezterm" })
 
 config.keys = {
   { key = "p", mods = "LEADER", action = nap.action() },
@@ -391,13 +473,17 @@ return config
 
 The first selector presents the available operations:
 
-| Operation | Description |
-|---|---|
-| **Status** | List all managed plugins with name, URL, priority, and enabled state |
-| **Update All** | Run `wezterm.plugin.update_all()` and rewrite the lockfile |
-| **Uninstall** | Pick a plugin to delete from disk and remove from the lockfile |
-| **Enable / Disable** | Toggle a plugin at runtime (does not persist across restarts) |
-| **Open Directory** | Open a plugin's clone directory in a new terminal tab |
+| Operation             | Description                                                          |
+| --------------------- | -------------------------------------------------------------------- |
+| **Status**            | List all managed plugins with name, URL, priority, and enabled state |
+| **Update All**        | Fetch and update every declared plugin                               |
+| **Update Plugin**     | Pick a single plugin to update                                       |
+| **Uninstall**         | Pick a plugin to delete from disk                                    |
+| **Enable / Disable**  | Toggle a plugin at runtime (does not persist across restarts)        |
+| **Open Directory**    | Open a plugin's clone directory in a new terminal tab                |
+| **Clean Orphans**     | Detect and remove plugins installed on disk but not declared         |
+| **Snapshot Lockfile** | Save current commit SHAs to the lockfile                             |
+| **Restore Lockfile**  | Restore plugins to the commits recorded in the lockfile              |
 
 Selecting an operation that targets a specific plugin opens a second selector
 listing the applicable plugins.
@@ -420,12 +506,12 @@ When update checks are enabled, nap emits the following events:
 Emitted when an update check completes (with or without updates available).
 
 **Payload:**
+
 ```lua
 {
   check_time = os.time(),           -- Unix timestamp of check
   update_count = 2,                 -- Number of plugins with updates
   plugins = {"plugin1", "plugin2"}, -- List of plugin names with updates
-  error = nil,                      -- Error message if check failed
 }
 ```
 
@@ -434,12 +520,6 @@ Emitted when an update check completes (with or without updates available).
 Emitted only if updates are found (subset of `nap-updates-checked`).
 
 **Payload:** Same as `nap-updates-checked`
-
-#### `nap-update-check-error`
-
-Emitted if the update check encounters an error.
-
-**Payload:** Same as `nap-updates-checked` (with `error` field populated)
 
 ### Example: Status Bar Badge
 
@@ -453,15 +533,6 @@ wezterm.on("nap-updates-available", function(window, pane, payload)
     wezterm.format {
       { Foreground = { AnsiColor = "Yellow" } },
       { Text = " ◆ " .. payload.update_count .. " updates" },
-    }
-  )
-end)
-
-wezterm.on("nap-update-check-error", function(window, pane, payload)
-  window:set_right_status(
-    wezterm.format {
-      { Foreground = { AnsiColor = "Red" } },
-      { Text = " ✗ Update check failed" },
     }
   )
 end)
@@ -489,11 +560,12 @@ end)
 When `setup()` is called, nap runs this pipeline:
 
 1. **Expand imports** - splice imported module specs into the list
-2. **Normalize** - resolve URLs, derive names, apply defaults
-3. **Validate** - warn about specs with no resolvable URL
-4. **Merge** - combine specs sharing the same `name`
-5. **Sort** - order by descending `priority`, then declaration order
-6. **Apply** - `wezterm.plugin.require()` each plugin and call `apply_to_config`
+2. **Expand dependencies** - inject dependency specs with cycle detection
+3. **Normalize** - resolve URLs, derive names, apply defaults
+4. **Validate** - warn about specs with no resolvable URL; check pin mutual exclusivity
+5. **Merge** - combine specs sharing the same `name`
+6. **Sort** - order by descending `priority`, then declaration order
+7. **Apply** - `wezterm.plugin.require()` each plugin, pin version if specified, and call `apply_to_config`
 
 Failures at any step are logged and skipped - nap never aborts your config.
 
@@ -501,12 +573,12 @@ Failures at any step are logged and skipped - nap never aborts your config.
 
 nap resolves plugin URLs with the following precedence:
 
-| Condition | URL |
-|---|---|
-| `dev = true` and `dir` set | `file://` from `dir` |
-| `url` set | `url` as-is |
-| `"owner/repo"` shorthand | `https://github.com/owner/repo` |
-| `dir` set | `file://` from `dir` |
+| Condition                  | URL                             |
+| -------------------------- | ------------------------------- |
+| `dev = true` and `dir` set | `file://` from `dir`            |
+| `url` set                  | `url` as-is                     |
+| `"owner/repo"` shorthand   | `https://github.com/owner/repo` |
+| `dir` set                  | `file://` from `dir`            |
 
 ## Migration Guide
 
@@ -544,15 +616,8 @@ return nap.setup(
 1. **Specs as second argument**: Plugin specs are now the second parameter, not nested in
    `spec = { ... }`.
 
-2. **No `env` parameter**: Remove `env` from your setup. Plugins now access `wezterm` directly
-   in callbacks:
+2. **No `env` parameter**: Plugins access `wezterm` directly in callbacks:
 
-   **Before:**
-   ```lua
-   enabled = function(env) return env.hostname:match "work%" end
-   ```
-
-   **After:**
    ```lua
    enabled = function() return wezterm.hostname():match "work%" end
    ```
@@ -566,24 +631,12 @@ return nap.setup(
    nap.setup(config, specs, { lockfile = "nap-lock.lua" })
    ```
 
-5. **Enabled callbacks**: Update enabled functions to remove `env` parameter:
-
-   ```lua
-   -- Old
-   enabled = function(env) ... end
-
-   -- New
-   enabled = function() ... end  -- or omit it and use direct wezterm access
-   ```
-
 ## Non-Goals (v1)
 
 nap is intentionally simpler than lazy.nvim:
 
 - **No lazy loading** - no `event`, `ft`, `cmd`, `keys` equivalents
-- **No dependency graph** - ordering is via `priority` only
 - **No recursive imports** - imports are top-level only
-- **No strict lockfile enforcement** - advisory snapshots only
 - **No lifecycle hooks** - just `apply_to_config` (or `config` function)
 
 ## Acknowledgements

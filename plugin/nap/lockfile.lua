@@ -1,162 +1,154 @@
-local wezterm = require "wezterm"
+local git = require "nap.git"
+local u = require "nap.util" ---@type Nap.Util
 
-local util = require "nap.util"
-
+---@class Nap.Lockfile
 local M = {}
 
----Resolve a lockfile path. Relative paths are relative to wezterm.config_dir.
----@param path string
----@return string
-function M.resolve_path(path)
-  if path:match "^/" or path:match "^%a:" then
-    return path
-  end
-  local sep = package.config:sub(1, 1)
-  return wezterm.config_dir .. sep .. path
-end
-
----Read and return the contents of a lockfile.
----@param path string
----@return table|nil
-function M.read(path)
-  local abs = M.resolve_path(path)
-  -- Check if file exists before trying to load it
-  local f = io.open(abs, "r")
-  if not f then
-    util.info(("no lockfile found at '%s'; skipping"):format(abs))
-    return nil
-  end
-  f:close()
-
-  local ok, result = pcall(dofile, abs)
-  if not ok then
-    util.warn(("could not parse lockfile '%s': %s"):format(abs, result))
-    return nil
-  end
-  if type(result) ~= "table" then
-    util.warn(("lockfile '%s' did not return a table"):format(abs))
-    return nil
+---Take a snapshot of the current state of all resolved plugins.
+---For each spec with a resolved URL and an existing plugin directory,
+---records the current commit SHA and branch.
+---@param specs table[]  resolved specs (from _state.resolved)
+---@return table snapshot  { [name] = { url, commit, branch? } }
+function M.snapshot(specs)
+  local result = {}
+  for _, s in ipairs(specs) do
+    if s._resolved_url and s.name then
+      local plugin_dir = u.find_plugin_dir(s._resolved_url)
+      if plugin_dir then
+        local sha = git.rev_parse_head(plugin_dir)
+        local branch = git.current_branch(plugin_dir)
+        if sha then
+          result[s.name] = {
+            url = s._resolved_url,
+            commit = sha,
+            branch = branch,
+          }
+        end
+      end
+    end
   end
   return result
 end
 
----Write a lockfile from current plugin state.
----Matches resolved spec names against installed plugins via wezterm.plugin.list().
----Includes reproducibility fields (commit_sha) and update check metadata.
----@param path string
----@param specs table[] resolved specs
----@param last_check_time? number unix timestamp of last update check
-function M.write(path, specs, last_check_time)
-  local abs = M.resolve_path(path)
-
-  -- Build url -> name map from resolved specs
-  local url_map = {}
-  for _, s in ipairs(specs) do
-    if s.name and s._resolved_url then
-      url_map[s._resolved_url] = s.name
-    end
-  end
-
-  -- Match against installed plugins
-  local entries = {}
-  for _, p in ipairs(wezterm.plugin.list()) do
-    local name = url_map[p.url]
-    if name then
-      -- Capture commit_sha if available (for reproducibility)
-      local commit_sha = nil
-      if p.commit_sha then
-        commit_sha = p.commit_sha
-      elseif p.version then
-        -- Fallback to version if commit_sha is not available
-        commit_sha = p.version
-      end
-
-      entries[name] = {
-        url = p.url,
-        plugin_dir = p.plugin_dir,
-        commit_sha = commit_sha,
-      }
-    end
-  end
-
-  -- Sort keys for deterministic output
-  local keys = {}
-  for k in pairs(entries) do
-    keys[#keys + 1] = k
-  end
-  table.sort(keys)
-
-  -- Serialize as a Lua table with extended schema
+---Serialize a snapshot table to a Lua source string.
+---@param data table  snapshot data from snapshot()
+---@return string lua_source
+function M.serialize(data)
   local lines = { "return {" }
-  for _, name in ipairs(keys) do
-    local e = entries[name]
-    if e.commit_sha then
-      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s", commit_sha = "%s" },')
-        :format(name, e.url, e.plugin_dir, e.commit_sha)
-    else
-      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s" },')
-        :format(name, e.url, e.plugin_dir)
-    end
-  end
-  lines[#lines + 1] = "}"
-
-  local content = table.concat(lines, "\n") .. "\n"
-
-  local f, err = io.open(abs, "w")
-  if not f then
-    util.error(("could not write lockfile '%s': %s"):format(abs, err))
-    return
-  end
-  f:write(content)
-  f:close()
-  util.info(("wrote lockfile to '%s'"):format(abs))
-end
-
----Remove a plugin entry from the lockfile by name.
----Reads the lockfile, deletes the matching key, and rewrites the file.
----@param path string   lockfile path
----@param name string   plugin name to remove
----@return boolean ok   true if found and removed
-function M.remove_entry(path, name)
-  local data = M.read(path)
-  if not data or not data[name] then
-    util.warn(("plugin '%s' not found in lockfile"):format(name))
-    return false
-  end
-
-  data[name] = nil
-
-  -- Rewrite the lockfile from the remaining data
-  local abs = M.resolve_path(path)
+  -- Sort keys for deterministic output
   local keys = {}
   for k in pairs(data) do
     keys[#keys + 1] = k
   end
   table.sort(keys)
 
-  local lines = { "return {" }
-  for _, k in ipairs(keys) do
-    local e = data[k]
-    if e.commit_sha then
-      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s", commit_sha = "%s" },')
-        :format(k, e.url, e.plugin_dir, e.commit_sha)
-    else
-      lines[#lines + 1] = ('  ["%s"] = { url = "%s", plugin_dir = "%s" },')
-        :format(k, e.url, e.plugin_dir)
+  for _, name in ipairs(keys) do
+    local entry = data[name]
+    lines[#lines + 1] = ("  [%q] = {"):format(name)
+    lines[#lines + 1] = ("    url = %q,"):format(entry.url)
+    lines[#lines + 1] = ("    commit = %q,"):format(entry.commit)
+    if entry.branch then
+      lines[#lines + 1] = ("    branch = %q,"):format(entry.branch)
     end
+    lines[#lines + 1] = "  },"
   end
-  lines[#lines + 1] = "}"
+  lines[#lines + 1] = "}\n"
+  return table.concat(lines, "\n")
+end
 
-  local content = table.concat(lines, "\n") .. "\n"
-  local f, err = io.open(abs, "w")
+---Write a snapshot to a lockfile.
+---@param path string  absolute path to the lockfile
+---@param data table   snapshot data
+---@return boolean ok, string|nil err
+function M.write(path, data)
+  local content = M.serialize(data)
+  local f, err = io.open(path, "w")
   if not f then
-    util.error(("could not write lockfile '%s': %s"):format(abs, err))
-    return false
+    return false, err
   end
   f:write(content)
   f:close()
-  util.info(("removed '%s' from lockfile"):format(name))
-  return true
+  return true, nil
+end
+
+---Read a lockfile.
+---@param path string  absolute path to the lockfile
+---@return table|nil data, string|nil err
+function M.read(path)
+  local f = io.open(path, "r")
+  if not f then
+    return nil, "lockfile not found: " .. path
+  end
+  local content = f:read "*a"
+  f:close()
+
+  local fn, err = load(content, path, "t", {})
+  if not fn then
+    return nil, "failed to parse lockfile: " .. (err or "unknown error")
+  end
+  local ok, result = pcall(fn)
+  if not ok then
+    return nil, "failed to execute lockfile: " .. tostring(result)
+  end
+  if type(result) ~= "table" then
+    return nil, "lockfile did not return a table"
+  end
+  return result, nil
+end
+
+---Restore plugins to the commits recorded in a lockfile.
+---For each entry in the lockfile that matches a declared spec,
+---fetches and checks out the recorded commit.
+---@param specs table[]  resolved specs
+---@param lockfile_data table  data from read()
+---@return table results  { [name] = { ok, from_sha?, to_sha? } }
+function M.restore(specs, lockfile_data)
+  local results = {}
+  local spec_by_name = {}
+  for _, s in ipairs(specs) do
+    if s.name then
+      spec_by_name[s.name] = s
+    end
+  end
+
+  for name, entry in pairs(lockfile_data) do
+    local s = spec_by_name[name]
+    if not s then
+      u.log.warn("lockfile entry '%s' has no matching spec; skipping", name)
+      results[name] = { ok = false, reason = "no matching spec" }
+    elseif not s._resolved_url then
+      u.log.warn("spec '%s' has no resolved URL; skipping restore", name)
+      results[name] = { ok = false, reason = "no resolved URL" }
+    else
+      local plugin_dir = u.find_plugin_dir(s._resolved_url)
+      if not plugin_dir then
+        u.log.warn("plugin directory not found for '%s'; skipping restore", name)
+        results[name] = { ok = false, reason = "plugin_dir not found" }
+      else
+        local from_sha = git.rev_parse_head(plugin_dir)
+        local fok = git.fetch(plugin_dir)
+        if not fok then
+          u.log.warn("failed to fetch for '%s'; attempting checkout anyway", name)
+        end
+        local cok, cerr = git.checkout(plugin_dir, entry.commit)
+        if cok then
+          local to_sha = git.rev_parse_head(plugin_dir)
+          u.log.info("restored '%s' to %s", name, entry.commit)
+          results[name] = { ok = true, from_sha = from_sha, to_sha = to_sha }
+        else
+          u.log.error(
+          "failed to restore '%s' to %s: %s",
+            name,
+            entry.commit,
+            cerr or "unknown"
+          )
+          results[name] = { ok = false, reason = cerr }
+        end
+      end
+    end
+  end
+
+  return results
 end
 
 return M

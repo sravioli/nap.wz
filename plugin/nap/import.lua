@@ -1,4 +1,4 @@
-local util = require "nap.util"
+local u = require "nap.util" ---@type Nap.Util
 
 local M = {}
 
@@ -12,29 +12,24 @@ function M.expand(spec_list)
     if raw.import then
       local ok, result = pcall(require, raw.import)
       if not ok then
-        util.error(
-          ("failed to import '%s': %s"):format(raw.import, result)
-        )
+        u.log.error("failed to import '%s': %s", raw.import, result)
       elseif type(result) ~= "table" then
-        util.error(
-          ("import '%s' did not return a table"):format(raw.import)
-        )
+        u.log.error("import '%s' did not return a table", raw.import)
       else
         local count = 0
         for _, imported in ipairs(result) do
           if imported.import then
-            util.warn(
-              ("nested import '%s' in '%s' is not supported in v1; skipping")
-                :format(imported.import, raw.import)
+            u.log.warn(
+              "nested import '%s' in '%s' is not supported in v1; skipping",
+              imported.import,
+              raw.import
             )
           else
             expanded[#expanded + 1] = imported
             count = count + 1
           end
         end
-        util.info(
-          ("imported %d specs from '%s'"):format(count, raw.import)
-        )
+        u.log.info("imported %d specs from '%s'", count, raw.import)
       end
     else
       expanded[#expanded + 1] = raw
