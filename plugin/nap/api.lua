@@ -236,18 +236,19 @@ function M.setup(config, specs, nap_opts)
 
   -- 7. Register command palette entries when enabled
   if nap_config.integrations and nap_config.integrations.command_palette then
+    local palette_actions = {
+      { brief = "nap: Plugin Manager", action = M.action() },
+      { brief = "nap: Plugin Status", action = M.action_status() },
+      { brief = "nap: Update All", action = M.action_update_all() },
+      { brief = "nap: Update Plugin", action = M.action_update_one() },
+      { brief = "nap: Uninstall", action = M.action_uninstall() },
+      { brief = "nap: Enable / Disable", action = M.action_toggle() },
+      { brief = "nap: Open Plugin Dir", action = M.action_open_dir() },
+      { brief = "nap: Snapshot Lockfile", action = M.action_snapshot() },
+      { brief = "nap: Restore Lockfile", action = M.action_restore() },
+    }
     wezterm.on("augment-command-palette", function(_window, _pane)
-      return {
-        { brief = "nap: Plugin Manager", action = M.action() },
-        { brief = "nap: Plugin Status", action = M.action_status() },
-        { brief = "nap: Update All", action = M.action_update_all() },
-        { brief = "nap: Update Plugin", action = M.action_update_one() },
-        { brief = "nap: Uninstall", action = M.action_uninstall() },
-        { brief = "nap: Enable / Disable", action = M.action_toggle() },
-        { brief = "nap: Open Plugin Dir", action = M.action_open_dir() },
-        { brief = "nap: Snapshot Lockfile", action = M.action_snapshot() },
-        { brief = "nap: Restore Lockfile", action = M.action_restore() },
-      }
+      return palette_actions
     end)
   end
 

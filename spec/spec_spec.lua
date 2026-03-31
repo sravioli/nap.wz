@@ -37,10 +37,7 @@ describe("nap.spec", function()
 
   describe("resolve_url", function()
     it("returns url field when present", function()
-      assert.equal(
-        "https://example.com",
-        spec.resolve_url { url = "https://example.com" }
-      )
+      assert.equal("https://example.com", spec.resolve_url { url = "https://example.com" })
     end)
 
     it("expands owner/repo shorthand", function()
@@ -190,20 +187,12 @@ describe("nap.spec", function()
     end)
 
     it("respects per-spec defaults for enabled", function()
-      local result = spec.normalize(
-        { url = "https://example.com/p" },
-        1,
-        { enabled = false }
-      )
+      local result = spec.normalize({ url = "https://example.com/p" }, 1, { enabled = false })
       assert.is_false(result.enabled)
     end)
 
     it("respects per-spec defaults for priority", function()
-      local result = spec.normalize(
-        { url = "https://example.com/p" },
-        1,
-        { priority = 50 }
-      )
+      local result = spec.normalize({ url = "https://example.com/p" }, 1, { priority = 50 })
       assert.equal(50, result.priority)
     end)
 
@@ -321,10 +310,8 @@ describe("nap.spec", function()
     end)
 
     it("fails when all three pin fields are set", function()
-      local s = spec.normalize(
-        { [1] = "foo/bar", branch = "main", tag = "v1.0", commit = "abc" },
-        1
-      )
+      local s =
+        spec.normalize({ [1] = "foo/bar", branch = "main", tag = "v1.0", commit = "abc" }, 1)
       local ok, err = spec.validate(s)
       assert.is_false(ok)
       assert.truthy(err:find "only one of")

@@ -734,10 +734,7 @@ describe("nap.ui", function()
     it("omits height when not set", function()
       local w = mock_window()
       local p = mock_pane()
-      local state = make_state(
-        { { name = "p", _resolved_url = "x", enabled = true } },
-        { ui = {} }
-      )
+      local state = make_state({ { name = "p", _resolved_url = "x", enabled = true } }, { ui = {} })
 
       ui.show_status(w, p, state)
 

@@ -199,10 +199,7 @@ describe("nap.git", function()
       end
       local ok = git.merge_ff "/repo"
       assert.is_true(ok)
-      assert.same(
-        { "git", "-C", "/repo", "merge", "--ff-only", "origin/HEAD" },
-        captured_cmd
-      )
+      assert.same({ "git", "-C", "/repo", "merge", "--ff-only", "origin/HEAD" }, captured_cmd)
     end)
 
     it("merges from specified ref", function()
@@ -212,10 +209,7 @@ describe("nap.git", function()
         return true, "", ""
       end
       git.merge_ff("/repo", "origin/main")
-      assert.same(
-        { "git", "-C", "/repo", "merge", "--ff-only", "origin/main" },
-        captured_cmd
-      )
+      assert.same({ "git", "-C", "/repo", "merge", "--ff-only", "origin/main" }, captured_cmd)
     end)
 
     it("returns false on merge conflict", function()
@@ -246,10 +240,7 @@ describe("nap.git", function()
         return true, "", ""
       end
       git.log_oneline("/repo", "abc123")
-      assert.same(
-        { "git", "-C", "/repo", "log", "--oneline", "abc123..HEAD" },
-        captured_cmd
-      )
+      assert.same({ "git", "-C", "/repo", "log", "--oneline", "abc123..HEAD" }, captured_cmd)
     end)
 
     it("returns nil on failure", function()

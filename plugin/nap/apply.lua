@@ -94,10 +94,7 @@ function M.run(config, specs, nap_config)
               if lok and loaded then
                 plugin = loaded
               else
-                u.log.warn(
-                  "could not reload '%s' after checkout; using initial load",
-                  label
-                )
+                u.log.warn("could not reload '%s' after checkout; using initial load", label)
               end
             end
           else

@@ -182,8 +182,7 @@ function M.validate(s)
   end
   if pin_count > 1 then
     local label = s.name or s._shorthand or "<unnamed>"
-    return false,
-      ("spec '%s': only one of 'branch', 'tag', or 'commit' may be set"):format(label)
+    return false, ("spec '%s': only one of 'branch', 'tag', or 'commit' may be set"):format(label)
   end
 
   -- URL resolution is business logic, not schema

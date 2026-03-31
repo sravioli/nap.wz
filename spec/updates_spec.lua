@@ -57,10 +57,7 @@ describe("nap.updates", function()
         emitted[event] = payload
       end
 
-      updates.check_updates_async(
-        { { _resolved_url = "https://example.com" } },
-        { enabled = true }
-      )
+      updates.check_updates_async({ { _resolved_url = "https://example.com" } }, { enabled = true })
       assert.equal(0, emitted["nap-updates-checked"].update_count)
     end)
 
@@ -183,10 +180,7 @@ describe("nap.updates", function()
     end)
 
     it("skips specs without name", function()
-      local result = updates.check_updates_sync(
-        { { _resolved_url = "https://example.com" } },
-        {}
-      )
+      local result = updates.check_updates_sync({ { _resolved_url = "https://example.com" } }, {})
       assert.same({}, result)
     end)
 
@@ -256,8 +250,7 @@ describe("nap.updates", function()
         return true, "", ""
       end
 
-      local spec =
-        { name = "a", _resolved_url = "https://github.com/owner/a", tag = "v1.0" }
+      local spec = { name = "a", _resolved_url = "https://github.com/owner/a", tag = "v1.0" }
       local ok, err = updates.update_plugin(spec)
       assert.is_true(ok)
 

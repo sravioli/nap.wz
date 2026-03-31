@@ -6,14 +6,7 @@ local sep = package.config:sub(1, 1)
 local root = "plugin"
 local pattern = root .. sep .. "?.lua"
 if not package.path:find(pattern, 1, true) then
-  package.path = pattern
-    .. ";"
-    .. root
-    .. sep
-    .. "?"
-    .. sep
-    .. "init.lua;"
-    .. package.path
+  package.path = pattern .. ";" .. root .. sep .. "?" .. sep .. "init.lua;" .. package.path
 end
 
 -- Add spec/support to path so mock_wezterm can be required.

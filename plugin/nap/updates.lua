@@ -75,9 +75,7 @@ local function has_update_with_retry(spec, timeout_ms, retry_count, retry_delay_
       else
         local sleep_s = retry_delay_ms / 1000
         if package.config:sub(1, 1) == "\\" then
-          os.execute(
-            "timeout /t " .. math.max(1, math.ceil(sleep_s)) .. " /nobreak >nul 2>&1"
-          )
+          os.execute("timeout /t " .. math.max(1, math.ceil(sleep_s)) .. " /nobreak >nul 2>&1")
         else
           os.execute("sleep " .. string.format("%g", sleep_s))
         end
@@ -128,8 +126,7 @@ function M.check_updates_async(specs, config)
           if cooldown_s > 0 and last_check and (check_time - last_check) < cooldown_s then
             u.log.info("skipping update check for '%s' (cooldown)", s.name)
           else
-            local update_status =
-              has_update_with_retry(s, timeout_ms, retry_count, retry_delay)
+            local update_status = has_update_with_retry(s, timeout_ms, retry_count, retry_delay)
             cache.update_timestamps[s.name] = os.time()
             if update_status then
               updates_available[#updates_available + 1] = s.name
@@ -205,8 +202,7 @@ function M.update_plugin(spec)
     -- Pinned: checkout the specific ref
     local cok, cerr = git.checkout(plugin_dir, pin_ref)
     if not cok then
-      return false,
-        ("checkout '%s' failed for '%s': %s"):format(pin_ref, label, cerr or "unknown")
+      return false, ("checkout '%s' failed for '%s': %s"):format(pin_ref, label, cerr or "unknown")
     end
   else
     -- Unpinned: fast-forward merge

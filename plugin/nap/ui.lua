@@ -656,12 +656,7 @@ local function build_top_choices(ui_cfg, colorscheme)
       id = "clean",
     },
     {
-      label = colored(
-        "accent",
-        icon(icons, "snapshot"),
-        "Snapshot Lockfile",
-        colorscheme
-      ),
+      label = colored("accent", icon(icons, "snapshot"), "Snapshot Lockfile", colorscheme),
       id = "snapshot",
     },
     {
