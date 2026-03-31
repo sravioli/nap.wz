@@ -1,0 +1,271 @@
+# luajit.yml — Selene standard library for LuaJIT
+# Schema and capabilities of this YAML format:
+# https://kampfkarren.github.io/selene/usage/std.html
+# Base on Lua 5.1, but enable LuaJIT syntax and APIs.
+name: luajit
+base: lua51
+
+globals:
+  # --- LuaJIT bit operations (require "bit") --------------------------------
+  # API reference: https://bitop.luajit.org/api.html
+  bit:
+    property: read-only
+  bit.tobit:
+    args:
+      - type: number
+  bit.tohex:
+    args:
+      - type: number
+      - type: number
+        required: false
+  bit.bnot:
+    args:
+      - type: number
+  bit.band:
+    args:
+      - type: number
+      - type: number
+      - type: "..."
+        required: false
+  bit.bor:
+    args:
+      - type: number
+      - type: number
+      - type: "..."
+        required: false
+  bit.bxor:
+    args:
+      - type: number
+      - type: number
+      - type: "..."
+        required: false
+  bit.lshift:
+    args:
+      - type: number
+      - type: number
+  bit.rshift:
+    args:
+      - type: number
+      - type: number
+  bit.arshift:
+    args:
+      - type: number
+      - type: number
+  bit.rol:
+    args:
+      - type: number
+      - type: number
+  bit.ror:
+    args:
+      - type: number
+      - type: number
+  bit.bswap:
+    args:
+      - type: number
+
+  # --- LuaJIT JIT control library ------------------------------------------
+  # API reference: https://luajit.org/ext_jit.html
+  jit:
+    property: read-only
+  jit.on:
+    args:
+      - type: any
+        required: false
+      - type: bool
+        required: false
+  jit.off:
+    args:
+      - type: any
+        required: false
+      - type: bool
+        required: false
+  jit.flush:
+    args:
+      - type: any
+        required: false
+      - type: bool
+        required: false
+  jit.status:
+    args: []
+  jit.version:
+    property: read-only
+  jit.version_num:
+    property: read-only
+  jit.os:
+    property: read-only
+  jit.arch:
+    property: read-only
+
+  # jit.opt.start (programmatic -O control)
+  # e.g., jit.opt.start(2), jit.opt.start("hotloop=10", "hotexit=2")
+  jit.opt.start:
+    args:
+      - type: "..."
+        required: false
+
+  # jit.attach: install/detach profiling/tracing callbacks
+  # https://luajit.org/ext_profiler.html
+  jit.attach:
+    args:
+      - type: function
+      - type: string
+        required: false
+
+  # jit.util: lots of introspection helpers; allow fields to be added
+  jit.util:
+    property: new-fields
+
+  # --- LuaJIT FFI -----------------------------------------------------------
+  # API reference: https://luajit.org/ext_ffi_api.html
+  ffi:
+    property: read-only
+  ffi.cdef:
+    args:
+      - type: string
+  ffi.typeof:
+    args:
+      - type: any
+  ffi.new:
+    args:
+      - type: any
+      - type: any
+        required: false
+  ffi.cast:
+    args:
+      - type: any
+      - type: any
+  ffi.load:
+    args:
+      - type: string
+      - type: bool
+        required: false
+  ffi.string:
+    args:
+      - type: any
+      - type: number
+        required: false
+  ffi.copy:
+    args:
+      - type: any
+      - type: any
+      - type: number
+  ffi.fill:
+    args:
+      - type: any
+      - type: number
+      - type: number
+  ffi.sizeof:
+    args:
+      - type: any
+  ffi.alignof:
+    args:
+      - type: any
+  ffi.offsetof:
+    args:
+      - type: any
+      - type: string
+  ffi.gc:
+    args:
+      - type: any
+      - type: any
+  ffi.metatype:
+    args:
+      - type: any
+      - type: table
+  ffi.C:
+    property: new-fields
+  ffi.os:
+    property: read-only
+  ffi.arch:
+    property: read-only
+
+  # --- LuaJIT string.buffer module ------------------------------------------
+  # API reference: https://luajit.org/ext_buffer.html
+  # Note: methods (buf:*) live on returned buffer objects; here we only
+  # declare the module constructor so requiring/using it is not flagged.
+  string.buffer.new:
+    args:
+      - type: number
+        required: false
+      - type: table
+        required: false
+
+  # --- Extra table helpers commonly provided by LuaJIT ----------------------
+  # Widely used in LuaJIT ecosystems (require "table.new"/"table.clear").
+  # See: https://github.com/LuaLS/lua-language-server/issues/1118
+  table.new:
+    args:
+      - type: number # narr
+      - type: number # nrec
+  table.clear:
+    args:
+      - type: table
+
+  # --- LuaJIT package library extensions ------------------------------------
+  # package.searchpath: backported from Lua 5.2
+  package.searchpath:
+    args:
+      - type: string # name
+      - type: string # path
+      - type: string # sep
+        required: false
+      - type: string # rep
+        required: false
+
+  # package.config is a string; declare :sub() so method calls aren't flagged.
+  package.config.sub:
+    method: true
+    args:
+      - type: number # i
+      - type: number # j
+        required: false
+
+  # --- I/O handles: declare :write()/:read() so method calls aren't flagged --
+  io.stderr.write:
+    method: true
+    args:
+      - type: "..."
+  io.stdout.write:
+    method: true
+    args:
+      - type: "..."
+  io.stdin.read:
+    method: true
+    args:
+      - type: "..."
+        required: false
+
+  # --- LuaJIT standard library behavioral differences -----------------------
+  # xpcall passes trailing args to the protected function.
+  # https://luajit.org/extensions.html
+  xpcall:
+    args:
+      - type: function
+      - type: function
+      - type: "..."
+        required: false
+
+  # load* add an optional 'mode' parameter; 'load' exists like in Lua 5.2.
+  # https://luajit.org/extensions.html
+  load:
+    args:
+      - type: any # chunk (string or reader func)
+      - type: string # chunkname
+        required: false
+      - type: string # mode
+        required: false
+      - type: table # env
+        required: false
+  loadstring:
+    args:
+      - type: string # source
+      - type: string # chunkname
+        required: false
+      - type: string # mode
+        required: false
+  loadfile:
+    args:
+      - type: string # filename
+        required: false
+      - type: string # mode
+        required: false
