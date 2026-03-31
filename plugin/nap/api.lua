@@ -251,6 +251,19 @@ function M.setup(config, specs, nap_opts)
     end)
   end
 
+  -- 8. Inject keybindings when keymaps is a table
+  if type(nap_config.keymaps) == "table" then
+    config.keys = config.keys or {}
+    local km = nap_config.keymaps
+    if km.toggle_input and type(km.toggle_input) == "table" then
+      config.keys[#config.keys + 1] = {
+        key = km.toggle_input.key,
+        mods = km.toggle_input.mods,
+        action = M.action(),
+      }
+    end
+  end
+
   return config
 end
 
