@@ -115,45 +115,31 @@ describe("nap.api", function()
       assert.equal(1, #wez._logs.info)
     end)
 
-    it("registers command palette when enabled", function()
-      local registered_events = {}
-      wez.on = function(event_name, cb)
-        registered_events[event_name] = cb
-      end
-
+    it("builds command palette entries when enabled", function()
       api.setup({}, {}, {
         integrations = { command_palette = true },
       })
 
-      assert.is_function(registered_events["augment-command-palette"])
+      local entries = api.command_palette_entries()
+      assert.is_table(entries)
+      assert.is_true(#entries > 0)
     end)
 
-    it("does not register command palette when disabled", function()
-      local registered_events = {}
-      wez.on = function(event_name, cb)
-        registered_events[event_name] = cb
-      end
-
+    it("does not build command palette entries when disabled", function()
       api.setup({}, {}, {
         integrations = { command_palette = false },
       })
 
-      assert.is_nil(registered_events["augment-command-palette"])
+      local entries = api.command_palette_entries()
+      assert.same({}, entries)
     end)
 
-    it("command palette callback returns action entries", function()
-      local palette_cb
-      wez.on = function(event_name, cb)
-        if event_name == "augment-command-palette" then
-          palette_cb = cb
-        end
-      end
-
+    it("command_palette_entries returns action entries", function()
       api.setup({}, {}, {
         integrations = { command_palette = true },
       })
 
-      local entries = palette_cb({}, {})
+      local entries = api.command_palette_entries()
       assert.is_table(entries)
       assert.equal(9, #entries)
       assert.truthy(entries[1].brief:find "Plugin Manager")

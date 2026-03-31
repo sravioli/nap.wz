@@ -154,7 +154,7 @@ Enable update checking and command palette integration:
 local wezterm = require "wezterm"
 local nap = require "nap"
 
-return nap.setup(
+local config = nap.setup(
   wezterm.config_builder(),
   { "sravioli/kanagawa.wz" },
   {
@@ -173,6 +173,18 @@ return nap.setup(
     },
   }
 )
+
+-- Merge nap entries into your command palette handler
+wezterm.on("augment-command-palette", function(window, pane)
+  -- your own entries (if any)
+  local entries = {}
+  for _, entry in ipairs(nap.command_palette_entries()) do
+    entries[#entries + 1] = entry
+  end
+  return entries
+end)
+
+return config
 ```
 
 ## Plugin Spec
@@ -501,6 +513,24 @@ Each operation is also available as a standalone action:
 | `nap.action_clean()`      | Orphan cleanup picker           |
 | `nap.action_snapshot()`   | Take a lockfile snapshot        |
 | `nap.action_restore()`    | Restore from lockfile           |
+
+### `nap.command_palette_entries()` → `table[]`
+
+Return the command palette entries built during `setup()`. Merge these into
+your own `augment-command-palette` handler:
+
+```lua
+wezterm.on("augment-command-palette", function(window, pane)
+  local entries = { --[[ your entries ]] }
+  for _, entry in ipairs(nap.command_palette_entries()) do
+    entries[#entries + 1] = entry
+  end
+  return entries
+end)
+```
+
+Requires `integrations.command_palette = true` in `nap_opts`. Returns an empty
+table when disabled or before `setup()` has run.
 
 ## Plugin Manager UI
 

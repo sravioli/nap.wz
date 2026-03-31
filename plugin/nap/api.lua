@@ -234,9 +234,9 @@ function M.setup(config, specs, nap_opts)
   -- 6. Schedule non-blocking update checks if enabled
   updates.check_updates_async(merged, nap_config.updates)
 
-  -- 7. Register command palette entries when enabled
+  -- 7. Build command palette entries when enabled
   if nap_config.integrations and nap_config.integrations.command_palette then
-    local palette_actions = {
+    _state.palette = {
       { brief = "nap: Plugin Manager", action = M.action() },
       { brief = "nap: Plugin Status", action = M.action_status() },
       { brief = "nap: Update All", action = M.action_update_all() },
@@ -247,9 +247,6 @@ function M.setup(config, specs, nap_opts)
       { brief = "nap: Snapshot Lockfile", action = M.action_snapshot() },
       { brief = "nap: Restore Lockfile", action = M.action_restore() },
     }
-    wezterm.on("augment-command-palette", function(_window, _pane)
-      return palette_actions
-    end)
   end
 
   -- 8. Inject keybindings when keymaps is a table
@@ -584,6 +581,22 @@ function M.action_restore()
   return wezterm.action_callback(function(_window, _pane)
     M.restore()
   end)
+end
+
+---Return the command palette entries for nap.
+---Merge these into your own `augment-command-palette` handler:
+---```lua
+---wezterm.on("augment-command-palette", function(window, pane)
+---  local entries = { --[[ your entries ]] }
+---  for _, entry in ipairs(nap.command_palette_entries()) do
+---    entries[#entries + 1] = entry
+---  end
+---  return entries
+---end)
+---```
+---@return table[] entries  list of `{ brief, action }` tables
+function M.command_palette_entries()
+  return _state.palette or {}
 end
 
 return M
