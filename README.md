@@ -72,16 +72,16 @@ return nap.setup(
   wezterm.config_builder(),
   {
     -- GitHub shorthand
-    { "owner/status-bar.wezterm", opts = { location = "right" } },
+    { "sravioli/warp.wz" },
 
-    -- Higher priority runs first
-    { "owner/theme.wezterm", priority = 1000, opts = { theme = "dracula" } },
+    -- Higher priority runs first (theme applied before utilities)
+    { "sravioli/kanagawa.wz", priority = 1000, opts = { scheme = "wave" } },
 
     -- Pin to a specific tag
-    { "owner/stable-plugin.wezterm", tag = "v2.1.0" },
+    { "sravioli/log.wz", tag = "0.1.0" },
 
     -- Only on work machines
-    { "owner/work-tools.wezterm",
+    { "sravioli/memo.wz",
       enabled = function() return wezterm.hostname():match "work%-laptop" end,
     },
   },
@@ -95,8 +95,8 @@ return nap.setup(
 After setup, you can require any managed plugin by short name:
 
 ```lua
-local theme = nap.require "theme.wezterm"    -- resolved from registry
-local bar   = nap.require "status-bar.wezterm" -- no need to repeat the URL
+local kanagawa = nap.require "kanagawa.wz" -- resolved from registry
+local warp     = nap.require "warp.wz"     -- no need to repeat the URL
 ```
 
 ### Structured (Recommended)
@@ -116,7 +116,7 @@ return nap.setup(
     { import = "plugins.tools" },
 
     -- Local overrides still work here
-    { "owner/status-bar.wezterm", opts = { theme = "catppuccin" } },
+    { "sravioli/kanagawa.wz", opts = { scheme = "dragon" } },
   },
   {
     lockfile = "nap-lock.lua",
@@ -130,8 +130,8 @@ return nap.setup(
 
 ```lua
 return {
-  { "owner/status-bar.wezterm", priority = 900, opts = { location = "right" } },
-  { "owner/tab-style.wezterm", opts = { fancy = true } },
+  { "sravioli/kanagawa.wz", priority = 900, opts = { scheme = "wave" } },
+  { "sravioli/log.wz" },
 }
 ```
 
@@ -139,8 +139,8 @@ return {
 
 ```lua
 return {
-  { "owner/session-manager.wezterm" },
-  { "company/work-tools.wezterm",
+  { "sravioli/warp.wz" },
+  { "sravioli/memo.wz",
     enabled = function() return wezterm.hostname():match "work%-laptop" end,
   },
 }
@@ -156,7 +156,7 @@ local nap = require "nap"
 
 return nap.setup(
   wezterm.config_builder(),
-  { "owner/plugin.wezterm" },
+  { "sravioli/kanagawa.wz" },
   {
     lockfile = "nap-lock.lua",
     updates = {
@@ -203,8 +203,8 @@ Each entry in `spec` is a table describing a plugin:
 The first positional element is the GitHub shorthand:
 
 ```lua
-{ "owner/repo" }
--- expands to: https://github.com/owner/repo
+{ "sravioli/warp.wz" }
+-- expands to: https://github.com/sravioli/warp.wz
 ```
 
 ### Explicit URL
@@ -221,7 +221,7 @@ Override the default GitHub host per plugin:
 Point to a local checkout:
 
 ```lua
-{ dir = "~/projects/my-plugin.wezterm" }
+{ dir = "~/projects/kanagawa.wz" }
 ```
 
 ### Dev Mode
@@ -229,9 +229,9 @@ Point to a local checkout:
 Switch between remote and local during development:
 
 ```lua
-{ "owner/my-plugin", dev = true, dir = "~/projects/my-plugin" }
+{ "sravioli/kanagawa.wz", dev = true, dir = "~/projects/kanagawa.wz" }
 -- Uses file:// URL from dir when dev = true
--- Uses https://github.com/owner/my-plugin when dev = false or omitted
+-- Uses https://github.com/sravioli/kanagawa.wz when dev = false or omitted
 ```
 
 ### Version Pinning
@@ -240,13 +240,13 @@ Lock a plugin to a specific branch, tag, or commit. Only one may be set:
 
 ```lua
 -- Pin to a branch
-{ "owner/theme.wezterm", branch = "v2" }
+{ "sravioli/kanagawa.wz", branch = "main" }
 
 -- Pin to a tag
-{ "owner/status-bar.wezterm", tag = "v1.3.0" }
+{ "sravioli/log.wz", tag = "0.1.0" }
 
 -- Pin to an exact commit
-{ "owner/session-manager.wezterm", commit = "a1b2c3d" }
+{ "sravioli/memo.wz", commit = "72bad71" }
 ```
 
 After `wezterm.plugin.require()` clones the repo, nap runs
@@ -259,10 +259,10 @@ in the spec list and inherit a priority one higher than the parent:
 
 ```lua
 {
-  "owner/fancy-bar.wezterm",
+  "sravioli/memo.wz",
   dependencies = {
-    { "owner/bar-utils.wezterm" },
-    { "owner/icon-pack.wezterm", priority = 2000 },
+    { "sravioli/log.wz" },
+    { "sravioli/warp.wz", priority = 2000 },
   },
 }
 ```
@@ -276,10 +276,10 @@ Override how a plugin is applied:
 
 ```lua
 {
-  "owner/theme.wezterm",
+  "sravioli/kanagawa.wz",
   config = function(plugin, config, opts)
     plugin.apply_to_config(config, opts)
-    config.color_scheme = "Catppuccin Mocha"
+    config.color_scheme = "Kanagawa Dragon"
   end,
 }
 ```
@@ -292,7 +292,7 @@ config builder, and the resolved `opts` table.
 
 ```lua
 {
-  "owner/work-tools.wezterm",
+  "sravioli/memo.wz",
   enabled = function()
     return wezterm.hostname():match "work%-laptop"
   end,
@@ -304,9 +304,9 @@ config builder, and the resolved `opts` table.
 Higher priority plugins are applied first:
 
 ```lua
-{ "owner/base-theme", priority = 1000 }  -- applied first
-{ "owner/status-bar", priority = 500 }   -- applied second
-{ "owner/tweaks" }                        -- priority 0 (default), applied last
+{ "sravioli/kanagawa.wz", priority = 1000 }  -- applied first
+{ "sravioli/warp.wz", priority = 500 }       -- applied second
+{ "sravioli/log.wz" }                         -- priority 0 (default), applied last
 ```
 
 Plugins with the same priority are applied in declaration order.
@@ -323,13 +323,13 @@ This lets you import a plugin pack and override individual settings:
 
 ```lua
 -- Imported from a shared module:
-{ "owner/status-bar", opts = { theme = "dracula", location = "right" } }
+{ "sravioli/kanagawa.wz", opts = { scheme = "wave", overrides = { cursor_bg = "#ff0000" } } }
 
 -- Your local override:
-{ "owner/status-bar", opts = { theme = "catppuccin" } }
+{ "sravioli/kanagawa.wz", opts = { scheme = "dragon" } }
 
 -- Result after merge:
--- opts = { theme = "catppuccin", location = "right" }
+-- opts = { scheme = "dragon", overrides = { cursor_bg = "#ff0000" } }
 ```
 
 ## Imports
@@ -348,8 +348,8 @@ The imported module must return a list of `WezPluginSpec` tables:
 ```lua
 -- plugins/ui.lua
 return {
-  { "owner/status-bar.wezterm", priority = 900 },
-  { "owner/tab-style.wezterm" },
+  { "sravioli/kanagawa.wz", priority = 900 },
+  { "sravioli/log.wz" },
 }
 ```
 
@@ -374,9 +374,9 @@ plugin and writes a Lua file to the configured `lockfile` path:
 ```lua
 -- nap-lock.lua (generated)
 return {
-  ["owner/status-bar"] = {
-    url = "https://github.com/owner/status-bar.wezterm",
-    commit = "a1b2c3d4e5f6...",
+  ["kanagawa.wz"] = {
+    url = "https://github.com/sravioli/kanagawa.wz",
+    commit = "a176bbb...",
     branch = "main",
   },
 }
@@ -406,17 +406,17 @@ name to its resolved URL. `nap.require()` uses this registry for short-name
 lookup.
 
 ```lua
--- By short name (derived from URL: "owner/warp" → "warp")
-local warp = nap.require "warp"
+-- By short name (derived from URL: "sravioli/warp.wz" → "warp.wz")
+local warp = nap.require "warp.wz"
 
--- With an explicit name in the spec: { "owner/long-name", name = "w" }
-local w = nap.require "w"
+-- With an explicit name in the spec: { "sravioli/kanagawa.wz", name = "kanagawa" }
+local kanagawa = nap.require "kanagawa"
 
 -- Full URL still works (backward compatible)
-local p = nap.require "https://github.com/owner/plugin"
+local log = nap.require "https://github.com/sravioli/log.wz"
 
 -- GitHub shorthand also works
-local q = nap.require "owner/plugin"
+local memo = nap.require "sravioli/memo.wz"
 ```
 
 **Name derivation** (automatic, no manual registration needed):
@@ -512,7 +512,7 @@ local wezterm = require "wezterm"
 local nap = require "nap"
 
 local config = wezterm.config_builder()
-nap.setup(config, { "owner/plugin.wezterm" })
+nap.setup(config, { "sravioli/kanagawa.wz" })
 
 config.keys = {
   { key = "p", mods = "LEADER", action = nap.action() },
