@@ -39,7 +39,7 @@ describe("nap.import", function()
     local result = imports.expand(specs)
     assert.equal(0, #result)
     assert.equal(1, #wez._logs.error)
-    assert.truthy(wez._logs.error[1]:find("nonexistent.module.xyz"))
+    assert.truthy(wez._logs.error[1]:find "nonexistent.module.xyz")
   end)
 
   it("logs error when import returns non-table", function()
@@ -50,7 +50,7 @@ describe("nap.import", function()
     local result = imports.expand(specs)
     assert.equal(0, #result)
     assert.equal(1, #wez._logs.error)
-    assert.truthy(wez._logs.error[1]:find("did not return a table"))
+    assert.truthy(wez._logs.error[1]:find "did not return a table")
     package.loaded["bad_module"] = nil
   end)
 
@@ -64,7 +64,7 @@ describe("nap.import", function()
     assert.equal(1, #result)
     assert.equal("foo/bar", result[1][1])
     assert.equal(1, #wez._logs.warn)
-    assert.truthy(wez._logs.warn[1]:find("nested import"))
+    assert.truthy(wez._logs.warn[1]:find "nested import")
     package.loaded["nested_test"] = nil
   end)
 

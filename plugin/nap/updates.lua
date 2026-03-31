@@ -206,7 +206,7 @@ function M.update_plugin(spec)
     local cok, cerr = git.checkout(plugin_dir, pin_ref)
     if not cok then
       return false,
-      ("checkout '%s' failed for '%s': %s"):format(pin_ref, label, cerr or "unknown")
+        ("checkout '%s' failed for '%s': %s"):format(pin_ref, label, cerr or "unknown")
     end
   else
     -- Unpinned: fast-forward merge

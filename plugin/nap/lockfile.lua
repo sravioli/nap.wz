@@ -137,7 +137,7 @@ function M.restore(specs, lockfile_data)
           results[name] = { ok = true, from_sha = from_sha, to_sha = to_sha }
         else
           u.log.error(
-          "failed to restore '%s' to %s: %s",
+            "failed to restore '%s' to %s: %s",
             name,
             entry.commit,
             cerr or "unknown"

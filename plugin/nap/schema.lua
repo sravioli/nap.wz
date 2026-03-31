@@ -72,7 +72,7 @@ end
 ---@return boolean ok           true when no errors were found
 ---@return string[] errors      list of human-readable error strings
 function M.validate(value, schema_def, path, errors)
-  path   = path   or "opts"
+  path = path or "opts"
   errors = errors or {}
 
   if type(value) ~= "table" then
@@ -81,7 +81,7 @@ function M.validate(value, schema_def, path, errors)
   end
 
   for field, descriptor in pairs(schema_def) do
-    local field_path  = path .. "." .. field
+    local field_path = path .. "." .. field
     local field_value = value[field]
 
     if descriptor.required == true and field_value == nil then
@@ -130,12 +130,16 @@ function M.validate(value, schema_def, path, errors)
       if type(field_value) == "number" then
         if descriptor.min ~= nil and field_value < descriptor.min then
           errors[#errors + 1] = ("%s must be >= %g, got %g"):format(
-            field_path, descriptor.min, field_value
+            field_path,
+            descriptor.min,
+            field_value
           )
         end
         if descriptor.max ~= nil and field_value > descriptor.max then
           errors[#errors + 1] = ("%s must be <= %g, got %g"):format(
-            field_path, descriptor.max, field_value
+            field_path,
+            descriptor.max,
+            field_value
           )
         end
       end

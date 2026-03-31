@@ -79,7 +79,7 @@ describe("nap.merge", function()
   end)
 
   it("handles empty spec list", function()
-    assert.same({}, merge.merge({}))
+    assert.same({}, merge.merge {})
   end)
 
   it("handles single unnamed spec", function()

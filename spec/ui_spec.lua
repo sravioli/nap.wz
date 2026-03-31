@@ -60,20 +60,17 @@ describe("nap.ui", function()
       for _, c in ipairs(args.choices) do
         ids[#ids + 1] = c.id
       end
-      assert.same(
-        {
-          "status",
-          "update_all",
-          "update_one",
-          "uninstall",
-          "toggle",
-          "open_dir",
-          "clean",
-          "snapshot",
-          "restore",
-        },
-        ids
-      )
+      assert.same({
+        "status",
+        "update_all",
+        "update_one",
+        "uninstall",
+        "toggle",
+        "open_dir",
+        "clean",
+        "snapshot",
+        "restore",
+      }, ids)
     end)
 
     it("sets title on InputSelector", function()
