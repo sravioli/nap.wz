@@ -699,4 +699,183 @@ describe("nap.api", function()
       assert.equal("repo", orphans[1].name)
     end)
   end)
+
+  -- ── require ─────────────────────────────────────────────────
+
+  describe("require", function()
+    it("resolves a short name via the registry", function()
+      local required_url
+      wez.plugin.require = function(url)
+        required_url = url
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { "owner/warp" },
+      })
+
+      local plugin = api.require "warp"
+      assert.equal("https://github.com/owner/warp", required_url)
+      assert.is_table(plugin)
+    end)
+
+    it("resolves an explicit name field", function()
+      local required_url
+      wez.plugin.require = function(url)
+        required_url = url
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { "owner/long-plugin-name.wezterm", name = "shortname" },
+      })
+
+      local plugin = api.require "shortname"
+      assert.equal("https://github.com/owner/long-plugin-name.wezterm", required_url)
+      assert.is_table(plugin)
+    end)
+
+    it("passes full URLs directly to wezterm.plugin.require", function()
+      local required_url
+      wez.plugin.require = function(url)
+        required_url = url
+        return { url = url }
+      end
+
+      api.setup({}, {})
+
+      api.require "https://github.com/owner/some-plugin"
+      assert.equal("https://github.com/owner/some-plugin", required_url)
+    end)
+
+    it("expands GitHub shorthand owner/repo", function()
+      local required_url
+      wez.plugin.require = function(url)
+        required_url = url
+        return { url = url }
+      end
+
+      api.setup({}, {})
+
+      api.require "owner/some-plugin"
+      assert.equal("https://github.com/owner/some-plugin", required_url)
+    end)
+
+    it("errors with actionable message for unknown short name", function()
+      wez.plugin.require = function(url)
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { "owner/alpha" },
+        { "owner/beta" },
+      })
+
+      local ok, err = pcall(api.require, "nonexistent")
+      assert.is_false(ok)
+      assert.truthy(err:find "not found in registry")
+      assert.truthy(err:find "nap.setup")
+      -- Should list available names
+      assert.truthy(err:find "alpha")
+      assert.truthy(err:find "beta")
+    end)
+
+    it("errors when no plugins are registered", function()
+      api.setup({}, {})
+
+      local ok, err = pcall(api.require, "missing")
+      assert.is_false(ok)
+      assert.truthy(err:find "no plugins registered")
+    end)
+
+    it("strips .git from derived names in the registry", function()
+      local required_url
+      wez.plugin.require = function(url)
+        required_url = url
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { url = "https://github.com/owner/my-plugin.git" },
+      })
+
+      local plugin = api.require "my-plugin"
+      assert.equal("https://github.com/owner/my-plugin.git", required_url)
+      assert.is_table(plugin)
+    end)
+
+    it("builds registry from merged specs", function()
+      wez.plugin.require = function()
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { "owner/plugin", opts = { a = 1 } },
+        { "owner/plugin", opts = { b = 2 } },
+      })
+
+      local state = api._get_state()
+      -- Single merged entry in registry
+      assert.equal("https://github.com/owner/plugin", state.registry["plugin"])
+    end)
+
+    it("populates registry accessible via _get_state", function()
+      wez.plugin.require = function()
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { "owner/alpha" },
+        { "owner/beta" },
+      })
+
+      local state = api._get_state()
+      assert.equal("https://github.com/owner/alpha", state.registry["alpha"])
+      assert.equal("https://github.com/owner/beta", state.registry["beta"])
+    end)
+  end)
+
+  -- ── name conflict warning ───────────────────────────────────
+
+  describe("name conflict warning", function()
+    it("warns when different URLs derive the same name", function()
+      wez.plugin.require = function()
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { url = "https://github.com/org1/warp" },
+        { url = "https://gitlab.com/org2/warp" },
+      }, { log_level = "warn" })
+
+      local found_warning = false
+      for _, msg in ipairs(wez._logs.warn) do
+        if msg:find "multiple specs derive name" and msg:find "warp" then
+          found_warning = true
+          break
+        end
+      end
+      assert.is_true(found_warning)
+    end)
+
+    it("does not warn when same URL appears twice", function()
+      wez.plugin.require = function()
+        return { apply_to_config = function() end }
+      end
+
+      api.setup({}, {
+        { "owner/plugin", opts = { a = 1 } },
+        { "owner/plugin", opts = { b = 2 } },
+      }, { log_level = "warn" })
+
+      local found_conflict_warning = false
+      for _, msg in ipairs(wez._logs.warn) do
+        if msg:find "multiple specs derive name" then
+          found_conflict_warning = true
+          break
+        end
+      end
+      assert.is_false(found_conflict_warning)
+    end)
+  end)
 end)

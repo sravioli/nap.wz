@@ -36,6 +36,7 @@ local M = {}
 local _state = {
   nap_config = {},
   resolved = {},
+  registry = {}, -- name -> resolved URL mapping for nap.require()
 }
 
 ---Expand `dependencies` fields in raw specs.
@@ -137,7 +138,7 @@ end
 ---Usage:
 ---```lua
 ---local wezterm = require "wezterm"
----local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+---local nap = require "nap"
 ---
 ---return nap.setup(
 ---  wezterm.config_builder(),
@@ -189,9 +190,34 @@ function M.setup(config, specs, nap_opts)
     end
   end
 
+  -- 3b. Warn about name conflicts from different URLs
+  local _seen_urls = {}
+  for _, s in ipairs(normalized) do
+    if s.name and s._resolved_url then
+      if _seen_urls[s.name] and _seen_urls[s.name] ~= s._resolved_url then
+        u.log.warn(
+          "multiple specs derive name '%s' from different URLs (%s vs %s); "
+            .. "consider adding an explicit 'name' field to disambiguate",
+          s.name,
+          _seen_urls[s.name],
+          s._resolved_url
+        )
+      end
+      _seen_urls[s.name] = s._resolved_url
+    end
+  end
+
   -- 4. Merge by name
   local merged = merge.merge(normalized)
   _state.resolved = merged
+
+  -- 4b. Build name→URL registry for nap.require()
+  _state.registry = {}
+  for _, s in ipairs(merged) do
+    if s.name and s._resolved_url then
+      _state.registry[s.name] = s._resolved_url
+    end
+  end
 
   -- 5. Apply all enabled plugins
   apply.run(config, merged, nap_config)
@@ -217,6 +243,62 @@ function M.setup(config, specs, nap_opts)
   end
 
   return config
+end
+
+---Require a plugin by short name or full URL.
+---
+---When called with a short name (e.g. `"warp"`), resolves it via the
+---internal registry built during `setup()`. When called with a URL or
+---GitHub shorthand (`"owner/repo"`), delegates directly to
+---`wezterm.plugin.require()`.
+---
+---Usage:
+---```lua
+---local warp = nap.require "warp"        -- short name
+---local bar  = nap.require "status-bar"   -- derived from URL
+---
+----- full URL still works
+---local p = nap.require "https://github.com/owner/plugin"
+---```
+---
+---@param name_or_url string  short name, GitHub shorthand, or full URL
+---@return table plugin  the loaded plugin module
+function M.require(name_or_url)
+  -- Full URL: delegate directly
+  if name_or_url:find("://", 1, true) then
+    return wezterm.plugin.require(name_or_url)
+  end
+
+  -- GitHub shorthand (owner/repo): expand and delegate
+  if name_or_url:match "^[%w%-_.]+/[%w%-_.]+" then
+    return wezterm.plugin.require("https://github.com/" .. name_or_url)
+  end
+
+  -- Short name: look up in registry
+  local url = _state.registry[name_or_url]
+  if url then
+    return wezterm.plugin.require(url)
+  end
+
+  -- Unknown name: actionable error
+  local names = {}
+  for k, _ in pairs(_state.registry) do
+    names[#names + 1] = k
+  end
+  table.sort(names)
+
+  local available = #names > 0 and "registered plugins: " .. table.concat(names, ", ")
+    or "no plugins registered (has nap.setup() been called?)"
+
+  error(
+    (
+      "[nap.wz] plugin '%s' not found in registry. "
+      .. "Ensure it is included in your nap.setup() specs.\n"
+      .. '  Example: { "owner/%s", name = "%s" }\n'
+      .. "  %s"
+    ):format(name_or_url, name_or_url, name_or_url, available),
+    2
+  )
 end
 
 ---WezTerm plugin protocol compatibility wrapper.

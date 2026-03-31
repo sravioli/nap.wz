@@ -14,7 +14,7 @@ Declare your plugins. nap handles the rest.
 
 ## Features
 
-- **Declarative specs** - `"owner/repo"` shorthand, just like lazy.nvim
+- **Declarative specs** - `"owner/repo"` shorthand for GitHub plugins
 - **GitHub by default** - `"owner/repo"` auto-expands to `https://github.com/owner/repo`
 - **Version pinning** - lock plugins to a `branch`, `tag`, or `commit`
 - **Dependencies** - declare per-plugin dependencies with automatic ordering and cycle detection
@@ -27,21 +27,33 @@ Declare your plugins. nap handles the rest.
 - **Lockfile** - snapshot and restore exact plugin commits for reproducibility
 - **Orphan cleanup** - detect and remove plugins installed on disk but not declared
 - **Per-plugin updates** - update individual plugins via git fetch + merge/checkout
-- **Zero bootstrap** - ships as a native WezTerm plugin, no custom git logic
+- **One-time bootstrap** - copy one file, then `require "nap"` everywhere
 - **Plugin Manager UI** - `InputSelector`-based interface for status, update, uninstall, and more
 
 ## Installation
 
-nap.wz is installed through WezTerm's built-in plugin system. No external
-tooling required.
+Copy [`bootstrap.lua`](bootstrap.lua) into your WezTerm config directory
+(e.g. `~/.config/wezterm/`) and **rename it to `nap.lua`**:
 
-```lua
-local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+```sh
+# Linux / macOS
+curl -o "${XDG_CONFIG_HOME:-$HOME/.config}/wezterm/nap.lua" \
+  https://raw.githubusercontent.com/sravioli/nap.wz/main/bootstrap.lua
+
+# Windows (PowerShell)
+Invoke-WebRequest `
+  https://raw.githubusercontent.com/sravioli/nap.wz/main/bootstrap.lua `
+  -OutFile "$env:USERPROFILE\.config\wezterm\nap.lua"
 ```
 
-That's it. WezTerm clones the repo on first load. To update nap itself, run
-`wezterm.plugin.update_all()` from the [Debug Overlay] (default:
+That's it. Now you can use nap anywhere in your config:
+
+```lua
+local nap = require "nap"
+```
+
+WezTerm clones the plugin automatically on first load. To update nap itself,
+run `wezterm.plugin.update_all()` from the [Debug Overlay] (default:
 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd>).
 
 [Debug Overlay]: https://wezterm.org/troubleshooting.html#debug-overlay
@@ -54,7 +66,7 @@ The simplest setup - everything in your `~/.wezterm.lua`:
 
 ```lua
 local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+local nap = require "nap"
 
 return nap.setup(
   wezterm.config_builder(),
@@ -80,6 +92,13 @@ return nap.setup(
 )
 ```
 
+After setup, you can require any managed plugin by short name:
+
+```lua
+local theme = nap.require "theme.wezterm"    -- resolved from registry
+local bar   = nap.require "status-bar.wezterm" -- no need to repeat the URL
+```
+
 ### Structured (Recommended)
 
 Split your specs into modules for better organization:
@@ -88,7 +107,7 @@ Split your specs into modules for better organization:
 
 ```lua
 local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+local nap = require "nap"
 
 return nap.setup(
   wezterm.config_builder(),
@@ -133,7 +152,7 @@ Enable update checking and command palette integration:
 
 ```lua
 local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+local nap = require "nap"
 
 return nap.setup(
   wezterm.config_builder(),
@@ -378,6 +397,37 @@ without a matching spec are skipped.
 
 ## Full API
 
+### `nap.require(name_or_url)` → `table`
+
+Require a plugin by short name instead of repeating the full URL.
+
+After `setup()` runs, nap builds an internal registry mapping each plugin's
+name to its resolved URL. `nap.require()` uses this registry for short-name
+lookup.
+
+```lua
+-- By short name (derived from URL: "owner/warp" → "warp")
+local warp = nap.require "warp"
+
+-- With an explicit name in the spec: { "owner/long-name", name = "w" }
+local w = nap.require "w"
+
+-- Full URL still works (backward compatible)
+local p = nap.require "https://github.com/owner/plugin"
+
+-- GitHub shorthand also works
+local q = nap.require "owner/plugin"
+```
+
+**Name derivation** (automatic, no manual registration needed):
+
+1. If the spec has an explicit `name` field, that name is used.
+2. Otherwise, the name is derived from the URL's last path segment
+   (stripping a trailing `.git` if present).
+
+If a short name is not found in the registry, an error is raised listing all
+available plugin names.
+
 ### `nap.setup(config, specs, nap_opts?)` → `config`
 
 The main entry point. Declares specs, resolves imports, expands dependencies,
@@ -459,7 +509,7 @@ nap includes a built-in management interface powered by WezTerm's
 
 ```lua
 local wezterm = require "wezterm"
-local nap = wezterm.plugin.require "https://github.com/sravioli/nap.wz"
+local nap = require "nap"
 
 local config = wezterm.config_builder()
 nap.setup(config, { "owner/plugin.wezterm" })
@@ -633,19 +683,9 @@ return nap.setup(
 
 ## Non-Goals (v1)
 
-nap is intentionally simpler than lazy.nvim:
-
 - **No lazy loading** - no `event`, `ft`, `cmd`, `keys` equivalents
 - **No recursive imports** - imports are top-level only
 - **No lifecycle hooks** - just `apply_to_config` (or `config` function)
-
-## Acknowledgements
-
-nap.wz is heavily inspired by [**lazy.nvim**](https://github.com/folke/lazy.nvim)
-by [Folke Lemaitre](https://github.com/folke). The declarative plugin spec
-format, merge-by-name semantics, import system, and `"owner/repo"` shorthand
-are all direct tributes to lazy.nvim's brilliant design. Thank you, Folke, for
-setting the standard for plugin management ergonomics.
 
 ## License
 
