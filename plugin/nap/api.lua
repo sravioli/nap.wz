@@ -102,6 +102,14 @@ function M._expand_dependencies(raw_specs)
   end
 
   for _, raw in ipairs(raw_specs) do
+    -- Normalize shorthand strings to spec tables
+    if type(raw) == "string" then
+      raw = { raw }
+    end
+    if type(raw) ~= "table" then
+      goto continue
+    end
+
     -- Expand dependencies of this spec (injected before the spec itself)
     if raw.dependencies then
       local parent_name = raw.name or raw[1]
@@ -128,6 +136,7 @@ function M._expand_dependencies(raw_specs)
       cleaned[1] = raw[1]
     end
     result[#result + 1] = cleaned
+    ::continue::
   end
 
   return result
